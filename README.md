@@ -6,7 +6,7 @@ fail2web is a lightweight docker container web application designed to interact 
 
 1. Clone the repository:
    
-   git clone <repository-url>
+   git clone https://github.com/isavage/fail2web.git
    
    cd fail2web
    
