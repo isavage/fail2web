@@ -7,7 +7,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  
     environment:
-      - FAIL2WEB_USERNAME=admin          # Admin username
-      - FAIL2WEB_PASSWORD=password       # Admin password
-      - FAIL2WEB_SECRET_KEY=your_secret_key  # Replace with a secure key
-      - FAIL2BAN_CONTAINER_NAME=fail2ban  # Name of your Fail2Ban container
+      - FAIL2WEB_USERNAME=${FAIL2WEB_USERNAME}
+      - FAIL2WEB_PASSWORD=${FAIL2WEB_PASSWORD}
+      - FAIL2WEB_SECRET_KEY=${FAIL2WEB_SECRET_KEY}
+      - FAIL2BAN_CONTAINER_NAME=${FAIL2BAN_CONTAINER_NAME}
+    restart: unless-stopped
