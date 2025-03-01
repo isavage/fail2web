@@ -1,7 +1,7 @@
 services:
   fail2web:
     image: thech0sen0ne/fail2web:latest  
-    container_name: my-fail2web          
+    container_name: fail2web          
     ports:
       - "5000:5000"                      
     volumes:
