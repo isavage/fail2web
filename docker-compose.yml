@@ -1,0 +1,13 @@
+services:
+  fail2web:
+    image: thech0sen0ne/fail2web:latest  
+    container_name: my-fail2web          
+    ports:
+      - "5000:5000"                      
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  
+    environment:
+      - FAIL2WEB_USERNAME=admin          # Admin username
+      - FAIL2WEB_PASSWORD=password       # Admin password
+      - FAIL2WEB_SECRET_KEY=your_secret_key  # Replace with a secure key
+      - FAIL2BAN_CONTAINER_NAME=fail2ban  # Name of your Fail2Ban container
