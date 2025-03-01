@@ -1,6 +1,9 @@
 # fail2web
 fail2web is a lightweight docker container web application designed to interact with the fail2ban service running in a separate docker container. It provides a modern and elegant interface for managing jails and banned IPs through a user-friendly web application.
 
+![Screenshot 2025-02-28 at 7 32 16 PM](https://github.com/user-attachments/assets/6255ac88-0c25-457d-bc65-475de9d892e2)
+
+![Screenshot 2025-02-28 at 7 33 12 PM](https://github.com/user-attachments/assets/89d984bd-e343-4e31-89fe-39ef19f083ff)
 
 ## Setup Instructions
 
