@@ -581,14 +581,37 @@ def unban_ip():
 @token_required
 def get_filter_content(filter_name):
     try:
-        # Path to filter configuration files
-        filter_path = Path('/data/filter.d') / f'{filter_name}.conf'
+        # Paths for filter configuration files based on docker-compose mounts
+        # Filter files are mounted at /data/fail2ban/filter.d/ in fail2web container
+        possible_paths = [
+            # Docker mount path (from docker-compose.yml)
+            Path('/data/fail2ban/filter.d') / f'{filter_name}.conf',
+            Path('/data/fail2ban/filter.d') / filter_name,
+            # Original development path
+            Path('/data/filter.d') / f'{filter_name}.conf',
+            Path('/data/filter.d') / filter_name,
+            # Standard fail2ban paths
+            Path('/etc/fail2ban/filter.d') / f'{filter_name}.conf',
+            Path('/etc/fail2ban/filter.d') / filter_name,
+            Path('/usr/share/fail2ban/filter.d') / f'{filter_name}.conf',
+            Path('/usr/share/fail2ban/filter.d') / filter_name,
+        ]
         
-        if not filter_path.exists():
-            # Try without .conf extension
-            filter_path = Path('/data/filter.d') / filter_name
-            if not filter_path.exists():
-                return jsonify({'error': f'Filter {filter_name} not found'}), 404
+        filter_path = None
+        for path in possible_paths:
+            if path.exists():
+                filter_path = path
+                logger.info(f"Found filter {filter_name} at {path}")
+                break
+        
+        if not filter_path:
+            # Filter not found in any location
+            logger.warning(f"Filter {filter_name} not found in any location. Checked paths: {possible_paths}")
+            return jsonify({
+                'status': 'not_found',
+                'message': f'Filter {filter_name} configuration not available. Check if filter file exists in /data/fail2ban/filter.d/.',
+                'filter': filter_name
+            })
         
         # Read filter content
         with open(filter_path, 'r') as f:
@@ -597,7 +620,8 @@ def get_filter_content(filter_name):
         return jsonify({
             'status': 'success',
             'content': content,
-            'filter': filter_name
+            'filter': filter_name,
+            'path': str(filter_path)
         })
         
     except Exception as e:

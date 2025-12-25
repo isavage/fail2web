@@ -179,7 +179,7 @@ function loadFilterContent(filterName) {
             // Handle non-200 responses
             if (response.status === 404) {
                 console.warn(`Filter ${filterName} not found on server`);
-                return { status: 'not_found', content: `Filter configuration for ${filterName} is not available. Using default settings.` };
+                return { status: 'not_found', message: `Filter configuration for ${filterName} is not available. Using default settings.` };
             }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -194,7 +194,7 @@ function loadFilterContent(filterName) {
             filterContent.style.display = 'block';
         } else if (data.status === 'not_found') {
             // Filter not found, show warning but don't display content
-            console.warn(data.content);
+            console.warn(data.message || `Filter ${filterName} not found`);
             // Optionally show a message to the user
             const filterContent = document.getElementById('filter-content');
             filterContent.style.display = 'none';
