@@ -816,7 +816,6 @@ fetchJails();
     
 // Refresh every 30 seconds
 setInterval(fetchJails, 30000);
-});
 
 function parseJailStatus(statusText) {
     const bannedIPsMatch = statusText.match(/Banned IP list:\t(.+)$/);

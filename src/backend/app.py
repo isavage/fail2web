@@ -72,14 +72,21 @@ def fail2ban_command(cmd):
             command,
             capture_output=True,
             text=True,
-            check=True
+            check=False  # Don't raise exception on non-zero exit
         )
         
         stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
         logger.debug(f"Command output: '{stdout}'")
+        logger.debug(f"Command stderr: '{stderr}'")
+        logger.debug(f"Command return code: {result.returncode}")
         
-        if not stdout and result.stderr:
-            logger.error(f"Command errored: {result.stderr}")
+        if result.returncode != 0:
+            logger.error(f"Command failed with return code {result.returncode}: {stderr}")
+            return None
+        
+        if not stdout and stderr:
+            logger.error(f"Command errored: {stderr}")
             return None
         
         if cmd == 'status':
@@ -150,13 +157,19 @@ def login():
 @token_required
 def get_jails():
     try:
+        logger.info("Attempting to get jail status from fail2ban")
         jails = fail2ban_command('status')
         if jails is None:
-            return jsonify({'error': 'Failed to communicate with fail2ban'}), 500
+            logger.error("fail2ban_command returned None - unable to communicate with fail2ban")
+            return jsonify({'error': 'Failed to communicate with fail2ban. Check if fail2ban is running and socket is accessible.'}), 500
+        logger.info(f"Successfully retrieved jails: {jails}")
         # Ensure we always return a list, even if empty
         return jsonify({'jails': jails if isinstance(jails, list) else []})
     except Exception as e:
         logger.error(f"Error in get_jails: {str(e)}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/banned/<jail>')
