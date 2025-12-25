@@ -364,18 +364,6 @@ def write_config_file(filepath, data):
     
     with open(filepath, 'w') as f:
         config.write(f)
-    
-    # Log the final configuration for debugging
-    logger.info(f"Configuration written to {filepath}:")
-    with open(filepath, 'r') as f:
-        config_content = f.read()
-        logger.info(f"Configuration content:\n{config_content}")
-    
-    # Ensure directory exists
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(filepath, 'w') as f:
-        config.write(f)
 
 @app.route('/api/jails/config/<jail_name>', methods=['DELETE'])
 @token_required

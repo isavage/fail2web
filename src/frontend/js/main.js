@@ -493,14 +493,36 @@ function handleJailFormSubmit(event) {
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
-            alert('Jail configuration saved successfully!\n\n' +
-                  (data.jail_started 
-                     ? 'Jail started and is now active.' 
-                     : 'Config saved. Jail will start on next reload or restart.'));
-            clearJailForm();
-            loadJailConfigs();
-            renderJailList(); // Refresh active jails list
-            fetchJails();     // Refresh the main jails view
+            // Show loading indicator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                font-family: Arial, sans-serif;
+                font-size: 16px;
+                z-index: 1000;
+                text-align: center;
+            `;
+            loadingDiv.innerHTML = '<div>Creating and activating jail...</div>';
+            document.body.appendChild(loadingDiv);
+            
+            setTimeout(() => {
+                document.body.removeChild(loadingDiv);
+                alert('Jail configuration saved successfully!\n\n' +
+                      (data.jail_active 
+                             ? 'Jail started and is now active.' 
+                             : 'Config saved. Jail will start on next reload or restart.'));
+                clearJailForm();
+                loadJailConfigs();
+                renderJailList(); // Refresh active jails
+                fetchJails();     // Refresh main jails view
+            }, 2000); // Remove loading after 2 seconds
         } else {
             alert('Error saving jail: ' + (data.error || 'Unknown error'));
         }
@@ -509,6 +531,7 @@ function handleJailFormSubmit(event) {
         console.error('Error saving jail config:', error);
         alert('Network error while saving jail configuration');
     });
+
 }
 
 function clearJailForm() {
