@@ -920,36 +920,19 @@ function viewBannedIPs(jailName) {
         container.innerHTML = '';
         
         if (data.status) {
-            const lines = data.status.split('\n');
-            const bannedIPs = [];
-            
-            lines.forEach(line => {
-                if (line.includes('Banned IP list:')) {
-                    const ips = line.split('Banned IP list:')[1].trim();
-                    if (ips) {
-                        bannedIPs.push(...ips.split(' '));
-                    }
-                }
-            });
+            const { bannedIPs } = parseJailStatus(data.status);
             
             if (bannedIPs.length > 0) {
                 const listElement = document.createElement('div');
                 listElement.innerHTML = `<h3>Banned IPs in ${jailName}</h3>`;
                 
-                const ipList = document.createElement('div');
-                ipList.className = 'ip-list';
+                const table = document.createElement('table');
+                table.className = 'ip-table';
+                table.id = 'ip-table';
                 
-                bannedIPs.forEach(ip => {
-                    const ipElement = document.createElement('div');
-                    ipElement.className = 'ip-item';
-                    ipElement.innerHTML = `
-                        <span>${ip}</span>
-                        <button onclick="unbanIP('${jailName}', '${ip}')">Unban</button>
-                    `;
-                    ipList.appendChild(ipElement);
-                });
+                renderIPTable(table, bannedIPs, jailName);
                 
-                listElement.appendChild(ipList);
+                listElement.appendChild(table);
                 container.appendChild(listElement);
             } else {
                 container.innerHTML = `<p>No banned IPs in ${jailName}.</p>`;
