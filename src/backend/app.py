@@ -101,59 +101,79 @@ def fail2ban_command(cmd):
             lines = stdout.split('\n')
             jails = []
             
-            # First, try to extract from "Jail list:" line
+            # Debug: log the raw output for troubleshooting
+            logger.debug(f"Raw fail2ban status output lines: {lines}")
+            
+            # First, try to extract from any line containing "Jail list:"
             for line in lines:
                 line = line.strip()
                 if not line:
                     continue
                     
-                # Look for "Jail list:" line which contains all jails
-                if line.lower().startswith('jail list:'):
-                    # Extract everything after "Jail list:"
-                    jail_list_part = line.split(':', 1)[1].strip()
-                    # Split by spaces, commas, or tabs to get individual jail names
+                # Look for any line containing "Jail list:" (case insensitive)
+                # Handle formats like "`- Jail list:	sshd" or "Jail list: sshd"
+                if 'jail list:' in line.lower():
+                    # Extract everything after "Jail list:" (case insensitive)
                     import re
-                    jail_names = re.split(r'[,\s\t]+', jail_list_part)
-                    for jail in jail_names:
-                        if jail and jail.lower() not in ['', 'none', 'jails']:
-                            jails.append(jail)
-                    break  # Found jail list line, we're done
+                    match = re.search(r'jail list:\s*(.+)', line, re.IGNORECASE)
+                    if match:
+                        jail_list_part = match.group(1).strip()
+                        logger.debug(f"Found jail list part: '{jail_list_part}'")
+                        
+                        # Split by spaces, commas, tabs, or other whitespace
+                        jail_names = re.split(r'[,\s\t]+', jail_list_part)
+                        for jail in jail_names:
+                            jail = jail.strip()
+                            if jail and jail.lower() not in ['', 'none', 'jails']:
+                                jails.append(jail)
+                        break  # Found jail list line, we're done
             
-            # If no "Jail list:" line found, try other parsing methods
+            # If still no jails found, try other parsing methods
             if not jails:
                 for line in lines:
                     line = line.strip()
                     if not line:
                         continue
                     
-                    # Skip header lines
+                    # Skip header lines and status lines
                     line_lower = line.lower()
                     if (line_lower.startswith('number of jail') or 
                         line_lower.startswith('status') or
-                        'total' in line_lower):
+                        'total' in line_lower or
+                        line in ['-', '|', '`']):
                         continue
                     
                     # Try to parse jail names from various formats
                     
-                    # Format 1: "1-sshd" (numbered list)
+                    # Format 1: "1-sshd" or "`- sshd" (numbered or bulleted list)
                     if '-' in line:
-                        parts = line.split('-')
+                        # Remove any bullet characters first
+                        clean_line = re.sub(r'^[`|\-]+\s*', '', line)
+                        parts = clean_line.split('-')
                         if len(parts) >= 2:
                             jail_name = parts[1].strip()
                             if jail_name and jail_name.lower() not in ['-', 'total', 'number', 'jail']:
                                 jails.append(jail_name)
+                        elif len(parts) == 1 and clean_line:
+                            # Might be just a jail name after bullet
+                            jail_name = clean_line.strip()
+                            if jail_name and re.match(r'^[a-zA-Z0-9_-]+$', jail_name):
+                                jails.append(jail_name)
                     
                     # Format 2: Just a jail name (like "sshd")
                     elif line and line.lower() not in ['-', 'total', 'number', 'jail']:
-                        # Make sure it looks like a jail name (no special chars)
-                        if re.match(r'^[a-zA-Z0-9_-]+$', line):
-                            jails.append(line)
+                        # Remove any bullet characters
+                        clean_line = re.sub(r'^[`|\-]+\s*', '', line)
+                        if clean_line and re.match(r'^[a-zA-Z0-9_-]+$', clean_line):
+                            jails.append(clean_line)
             
             # Remove duplicates and return
             unique_jails = []
             for jail in jails:
                 if jail and jail not in unique_jails:
                     unique_jails.append(jail)
+            
+            logger.debug(f"Parsed jails: {unique_jails}")
             return unique_jails if unique_jails else []
         
         return stdout
