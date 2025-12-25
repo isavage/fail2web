@@ -305,7 +305,7 @@ def delete_jail_config(jail_name):
         
     except Exception as e:
         logger.error(f"Error deleting jail config: {str(e)}")
-        return add_cors_headers(jsonify({'error': str(e)}), 500
+        return add_cors_headers(jsonify({'error': str(e)}), 500)
 
 @app.route('/api/jails/<jail_name>/start', methods=['POST'])
 @token_required
@@ -558,6 +558,7 @@ def verify_token():
         except Exception:
             return jsonify({'error': 'Token validation failed'}), 401
 
+
 if __name__ == '__main__':
     # Check if we can connect to fail2ban socket
     try:
@@ -572,3 +573,4 @@ if __name__ == '__main__':
         logger.error(f'Unexpected error checking fail2ban socket: {str(e)}')
     
     app.run(host='0.0.0.0', port=5000, debug=True)
+
