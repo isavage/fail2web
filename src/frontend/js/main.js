@@ -363,14 +363,45 @@ function addIgnoreIP() {
         return;
     }
     
+    // Add to local list and render
     ignoreIPList.push(ip);
     renderIgnoreIPList();
     input.value = '';
+    
+    // Auto-save to backend
+    saveIgnoreIPToBackend();
 }
 
 function removeIgnoreIP(ip) {
     ignoreIPList = ignoreIPList.filter(item => item !== ip);
     renderIgnoreIPList();
+    
+    // Auto-save to backend after removal
+    saveIgnoreIPToBackend();
+}
+
+function saveIgnoreIPToBackend() {
+    authenticatedFetch('/api/ignoreip', {
+        method: 'POST',
+        body: JSON.stringify({
+            ignoreip: ignoreIPList
+        })
+    })
+    .then(data => {
+        if (data.status === 'success') {
+            // Success - no need to alert, it's auto-save
+            console.log('Ignore IP list auto-saved successfully');
+        } else {
+            console.error('Error auto-saving ignoreIP:', data.error);
+            // Show error but don't use alert for auto-save
+            // User can use Refresh button if needed
+        }
+    })
+    .catch(error => {
+        console.error('Error auto-saving ignoreIP:', error);
+        // Don't show alert for auto-save errors
+        // User can use Refresh button if needed
+    });
 }
 
 function saveIgnoreIP() {
