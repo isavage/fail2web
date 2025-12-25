@@ -334,7 +334,7 @@ def create_jail_config():
             alt_start_response = fail2ban_command(f'start {jail_name} --once')
             logger.info(f"Alternative start response: {alt_start_response}")
         
-        @app.route('/api/jails/config', methods=['POST'])
+@app.route('/api/jails/config', methods=['POST'])
 @token_required
 def create_jail_config():
     """Create or update a jail configuration"""
