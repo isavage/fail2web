@@ -18,6 +18,13 @@ app.config['JWT_SECRET_KEY'] = os.getenv('FAIL2WEB_SECRET_KEY', 'your-secret-key
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 CORS(app)
 
+def add_cors_headers(response):
+    """Add CORS headers to response"""
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    return response
+
 # Logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -326,6 +333,47 @@ def create_jail_config():
             logger.info("Trying alternative start method...")
             alt_start_response = fail2ban_command(f'start {jail_name} --once')
             logger.info(f"Alternative start response: {alt_start_response}")
+        
+        @app.route('/api/jails/config', methods=['POST'])
+@token_required
+def create_jail_config():
+    """Create or update a jail configuration"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'filter', 'logpath']
+        for field in required_fields:
+            if not data.get(field):
+                return add_cors_headers(jsonify({'error': f'Missing required field: {field}'})), 400
+        
+        jail_name = data['name']
+        jail_filename = f"{jail_name}.local"
+        jail_filepath = Path(jail_d_path) / jail_filename
+        
+        # Write config file
+        write_config_file(jail_filepath, data)
+        
+        # Clean reload: stop fail2ban, reload, restart
+        logger.info(f"Performing clean reload for jail {jail_name}")
+        
+        # Stop fail2ban completely
+        stop_response = fail2ban_command('stop')
+        if stop_response is None:
+            logger.error("Failed to stop fail2ban")
+        
+        # Wait for stop to complete
+        time.sleep(2)
+        
+        # Start fail2ban (will auto-read new configs)
+        start_response = fail2ban_command('start')
+        if start_response is None:
+            logger.error("Failed to start fail2ban")
+        
+        # Wait for startup and verify
+        time.sleep(3)
+        status_response = fail2ban_command('status')
+        jail_active = jail_name in str(status_response) if status_response else False
         
         return add_cors_headers(jsonify({
             'status': 'success',
