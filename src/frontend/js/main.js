@@ -353,7 +353,8 @@ function loadTemplates() {
 
 function populateTemplateSelect() {
     const select = document.getElementById('jail-template');
-    select.innerHTML = '<option value="">-- Custom Configuration --</option>';
+    // Keep the existing options and add templates
+    select.innerHTML = '<option value="">-- Select Template --</option><option value="custom">Custom (configure manually)</option>';
     
     Object.keys(jailTemplates).forEach(templateName => {
         const option = document.createElement('option');

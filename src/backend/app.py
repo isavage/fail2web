@@ -406,7 +406,7 @@ def reload_fail2ban():
 def get_jail_templates():
     """Get available jail templates"""
     try:
-        templates_path = '/data/jail-templates.conf'
+        templates_path = '/data/templates/jail-templates.conf'
         templates = {}
         
         if Path(templates_path).exists():
