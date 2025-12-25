@@ -141,13 +141,21 @@ def login():
         logger.debug(f"Login attempt for user: {username}")
         
         if username == USERNAME and password == PASSWORD:
-            token = jwt.encode({
+            # Generate JWT token with explicit algorithm
+            payload = {
                 'sub': username,
-                'exp': datetime.utcnow() + app.config['JWT_ACCESS_TOKEN_EXPIRES']
-            }, app.config['JWT_SECRET_KEY'])
+                'exp': datetime.utcnow() + app.config['JWT_ACCESS_TOKEN_EXPIRES'],
+                'iat': datetime.utcnow()
+            }
+            token = jwt.encode(payload, app.config['JWT_SECRET_KEY'], algorithm='HS256')
+            
+            # Ensure token is string (not bytes)
+            if isinstance(token, bytes):
+                token = token.decode('utf-8')
             
             logger.debug(f"Generated token: {token[:20]}..." if len(token) > 20 else f"Generated token: {token}")
             logger.debug(f"JWT Secret Key: {app.config['JWT_SECRET_KEY'][:10]}...")
+            logger.debug(f"Token payload: {payload}")
             
             return jsonify({
                 'token': token,
@@ -603,4 +611,3 @@ if __name__ == '__main__':
         logger.error(f'Unexpected error checking fail2ban socket: {str(e)}')
     
     app.run(host='0.0.0.0', port=5000, debug=True)
-

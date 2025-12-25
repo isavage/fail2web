@@ -273,21 +273,19 @@ function clearJailForm() {
     document.getElementById('jail-filter-custom').style.display = 'none';
 }
 function loadIgnoreIP() {
-    fetch('/api/ignoreip', {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.ignoreip) {
-            ignoreIPList = data.ignoreip;
-            renderIgnoreIPList();
-        }
-    })
-    .catch(error => {
-        console.error('Error loading ignoreIP:', error);
-    });
+    authenticatedFetch('/api/ignoreip')
+        .then(data => {
+            if (data.ignoreip) {
+                ignoreIPList = data.ignoreip;
+                renderIgnoreIPList();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading ignoreIP:', error);
+            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                alert('Error loading ignoreIP: ' + error.message);
+            }
+        });
 }
 
 function renderIgnoreIPList() {
@@ -356,17 +354,12 @@ function removeIgnoreIP(ip) {
 }
 
 function saveIgnoreIP() {
-    fetch('/api/ignoreip', {
+    authenticatedFetch('/api/ignoreip', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getToken()
-        },
         body: JSON.stringify({
             ignoreip: ignoreIPList
         })
     })
-    .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
             alert('ignoreIP configuration saved successfully!');
@@ -376,26 +369,26 @@ function saveIgnoreIP() {
     })
     .catch(error => {
         console.error('Error saving ignoreIP:', error);
-        alert('Error saving ignoreIP configuration');
+        if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+            alert('Error saving ignoreIP configuration: ' + error.message);
+        }
     });
 }
 
 function loadTemplates() {
-    fetch('/api/jails/templates', {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.templates) {
-            jailTemplates = data.templates;
-            populateTemplateSelect();
-        }
-    })
-    .catch(error => {
-        console.error('Error loading templates:', error);
-    });
+    authenticatedFetch('/api/jails/templates')
+        .then(data => {
+            if (data.templates) {
+                jailTemplates = data.templates;
+                populateTemplateSelect();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading templates:', error);
+            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                alert('Error loading templates: ' + error.message);
+            }
+        });
 }
 
 function populateTemplateSelect() {
@@ -482,17 +475,10 @@ function handleJailFormSubmit(event) {
         return;
     }
 
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + getToken()
-    };
-
-    fetch('/api/jails/config', {
+    authenticatedFetch('/api/jails/config', {
         method: 'POST',
-        headers: headers,
         body: JSON.stringify(formData)
     })
-    .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
             // Enhanced loading indicator with better visibility
@@ -522,7 +508,7 @@ function handleJailFormSubmit(event) {
             loadingDiv.innerHTML = `
                 <div style="margin-bottom: 20px;">
                     <div style="font-size: 24px; margin-bottom: 10px;">⚙️ Creating Jail Configuration</div>
-                    <div style="font-size: 16px;">Writing and activating ${jailName}...</div>
+                    <div style="font-size: 16px;">Writing and activating ${formData.name}...</div>
                     <div style="margin-top: 10px; font-size: 14px; opacity: 0.7;">This may take a few seconds</div>
                 </div>
             `;
@@ -546,7 +532,9 @@ function handleJailFormSubmit(event) {
     })
     .catch(error => {
         console.error('Error saving jail config:', error);
-        alert('Network error while saving jail configuration');
+        if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+            alert('Network error while saving jail configuration: ' + error.message);
+        }
     });
 
 }
@@ -557,19 +545,51 @@ function clearJailForm() {
 }
 
 function loadJailConfigs() {
+    const token = getToken();
+    if (!token) {
+        window.location.href = '/login.html';
+        return;
+    }
+    
     fetch('/api/jails/config', {
         headers: {
-            'Authorization': 'Bearer ' + getToken()
+            'Authorization': 'Bearer ' + token
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (response.status === 401) {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+            return Promise.reject(new Error('Authentication failed'));
+        }
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            }).catch(() => {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            });
+        }
+        return response.json();
+    })
     .then(data => {
+        if (!data) {
+            return;
+        }
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
         if (data.jails) {
             renderJailConfigs(data.jails);
         }
     })
     .catch(error => {
         console.error('Error loading jail configs:', error);
+        if (error.message !== 'Authentication failed') {
+            // Show error to user if it's not an auth error
+            alert('Error loading jail configurations: ' + error.message);
+        }
     });
 }
 
@@ -965,6 +985,44 @@ function logout() {
     window.location.replace('/login.html');
 }
 
+// Helper function for authenticated API calls
+function authenticatedFetch(url, options = {}) {
+    const token = getToken();
+    if (!token) {
+        window.location.href = '/login.html';
+        return Promise.reject(new Error('No token'));
+    }
+    
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    return fetch(url, { ...options, headers })
+        .then(response => {
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/login.html';
+                return Promise.reject(new Error('Authentication failed'));
+            }
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                }).catch(() => {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.error) {
+                throw new Error(data.error);
+            }
+            return data;
+        });
+}
+
 // Check authentication on page load
 document.addEventListener('DOMContentLoaded', function() {
     const token = getToken();
@@ -980,22 +1038,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     })
     .then(response => {
+        if (response.status === 401) {
+            // Token expired or invalid
+            localStorage.removeItem('token');
+            window.location.replace('/login.html');
+            return Promise.reject(new Error('Token invalid'));
+        }
         if (!response.ok) {
-            throw new Error('Token invalid');
+            throw new Error(`Token verification failed: ${response.status}`);
         }
         return response.json();
     })
     .then(data => {
         // Token is valid, continue
+        if (data && data.error) {
+            throw new Error(data.error);
+        }
     })
     .catch(error => {
         console.error('Token verification failed:', error);
-        logout();
+        if (error.message !== 'Token invalid') {
+            // Only logout if it's not already handled
+            logout();
+        }
     });
 });
 
 function fetchJails() {
     const token = getToken();
+    if (!token) {
+        window.location.href = '/login.html';
+        return;
+    }
+    
     const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -1007,14 +1082,23 @@ function fetchJails() {
                 // Token expired or invalid
                 localStorage.removeItem('token');
                 window.location.href = '/login.html';
-                return;
+                return Promise.reject(new Error('Authentication failed'));
             }
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                }).catch(() => {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                });
             }
             return response.json();
         })
         .then(data => {
+            if (!data) {
+                // Response was handled (e.g., redirect)
+                return;
+            }
+            
             if (data.error) {
                 throw new Error(data.error);
             }
@@ -1062,8 +1146,10 @@ function fetchJails() {
         })
         .catch(error => {
             console.error('Error fetching jails:', error);
-            document.getElementById('jails-list').innerHTML = 
-                `<div class="error-message">Error: ${error.message}</div>`;
+            if (error.message !== 'Authentication failed') {
+                document.getElementById('jails-list').innerHTML = 
+                    `<div class="error-message">Error: ${error.message}</div>`;
+            }
         });
 }
 
