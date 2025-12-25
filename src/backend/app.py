@@ -561,6 +561,9 @@ def verify_token():
             return jsonify({'error': 'Invalid token'}), 401
         except Exception:
             return jsonify({'error': 'Token validation failed'}), 401
+    except Exception as e:
+        logger.error(f"Error verifying token: {str(e)}")
+        return jsonify({'error': str(e)}), 401
 
 
 if __name__ == '__main__':
