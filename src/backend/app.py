@@ -650,9 +650,10 @@ def update_ignoreip():
         logger.debug(f"Validated IPs: {validated_ips}")
         
         config = configparser.ConfigParser()
-        config.add_section('DEFAULT')
+        # DEFAULT section exists automatically in ConfigParser
+        # Don't call add_section('DEFAULT') - it's reserved
         ignoreip_text = '\n            '.join(validated_ips)
-        config.set('DEFAULT', 'ignoreip', ignoreip_text)
+        config['DEFAULT']['ignoreip'] = ignoreip_text
         
         ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
         ignoreip_file.parent.mkdir(parents=True, exist_ok=True)
