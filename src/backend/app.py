@@ -38,22 +38,30 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get('Authorization')
+        logger.debug(f"Auth header received: {auth_header}")
+        
         if not auth_header:
+            logger.warning("No Authorization header found")
             return jsonify({'error': 'Token is missing'}), 401
         
         # Extract token from "Bearer <token>" format
         token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
+        logger.debug(f"Extracted token: {token[:20]}..." if len(token) > 20 else f"Extracted token: {token}")
         
         try:
             decoded = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             if datetime.utcnow() > decoded['exp']:
+                logger.warning("Token has expired")
                 return jsonify({'error': 'Token has expired'}), 401
-        except jwt.InvalidTokenError:
+        except jwt.InvalidTokenError as e:
+            logger.error(f"Invalid token error: {str(e)}")
             return jsonify({'error': 'Invalid token'}), 401
-        except Exception:
+        except Exception as e:
+            logger.error(f"Token validation error: {str(e)}")
             return jsonify({'error': 'Token validation failed'}), 401
         
         g.current_user = decoded['sub']
+        logger.debug(f"Token validated successfully for user: {g.current_user}")
         return f(*args, **kwargs)
     return decorated
 
@@ -552,19 +560,8 @@ def unban_ip():
 @token_required
 def verify_token():
     try:
-        token = request.headers.get('Authorization')
-        if not token:
-            return jsonify({'error': 'Token is missing'}), 401
-        
-        try:
-            decoded = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
-            if datetime.utcnow() > decoded['exp']:
-                return jsonify({'error': 'Token has expired'}), 401
-            return jsonify({'valid': True, 'user': decoded['sub']})
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Invalid token'}), 401
-        except Exception:
-            return jsonify({'error': 'Token validation failed'}), 401
+        # Token is already validated by @token_required decorator
+        return jsonify({'valid': True, 'user': g.current_user})
     except Exception as e:
         logger.error(f"Error verifying token: {str(e)}")
         return jsonify({'error': str(e)}), 401
