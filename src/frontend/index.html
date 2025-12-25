@@ -30,6 +30,26 @@
                     <button onclick="hideJailConfig()" class="close-button">×</button>
                 </div>
                 <div class="jail-config-container">
+                    <div class="ignoreip-management">
+                        <h3>Ignore IP Management</h3>
+                        <p>Add IP addresses or CIDR ranges that should never be banned:</p>
+                        <div class="ignoreip-form">
+                            <div class="form-group">
+                                <label for="new-ignoreip">Add IP/CIDR:</label>
+                                <div class="ip-input-group">
+                                    <input type="text" id="new-ignoreip" placeholder="e.g., 192.168.1.100 or 10.0.0.0/8">
+                                    <button type="button" onclick="addIgnoreIP()" class="add-button">Add</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ignoreip-list" id="ignoreip-list">
+                            <!-- Current ignoreIP list will be populated here -->
+                        </div>
+                        <div class="form-buttons">
+                            <button type="button" onclick="saveIgnoreIP()" class="save-button">Save Changes</button>
+                            <button type="button" onclick="loadIgnoreIP()" class="refresh-button">Refresh</button>
+                        </div>
+                    </div>
                     <div class="jail-form">
                         <h3>Create/Edit Jail</h3>
                         <form id="jail-form">
@@ -83,30 +103,11 @@
                             </div>
                         </form>
                     </div>
-                    <div class="ignoreip-management">
-                        <h3>Ignore IP Management</h3>
-                        <p>Add IP addresses or CIDR ranges that should never be banned:</p>
-                        <div class="ignoreip-form">
-                            <div class="form-group">
-                                <label for="new-ignoreip">Add IP/CIDR:</label>
-                                <div class="ip-input-group">
-                                    <input type="text" id="new-ignoreip" placeholder="e.g., 192.168.1.100 or 10.0.0.0/8">
-                                    <button type="button" onclick="addIgnoreIP()" class="add-button">Add</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="ignoreip-list" id="ignoreip-list">
-                            <!-- Current ignoreIP list will be populated here -->
-                        </div>
-                        <div class="form-buttons">
-                            <button type="button" onclick="saveIgnoreIP()" class="save-button">Save Changes</button>
-                            <button type="button" onclick="loadIgnoreIP()" class="refresh-button">Refresh</button>
-                        </div>
-                    </div>
                     <div class="jail-list">
-                    <h3>Existing Jails</h3>
-                    <div id="jail-config-list">
-                        <!-- Jail configurations will be populated here -->
+                        <h3>Existing Jails</h3>
+                        <div id="jail-config-list">
+                            <!-- Jail configurations will be populated here -->
+                        </div>
                     </div>
                 </div>
             </section>
