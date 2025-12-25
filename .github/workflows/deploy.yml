@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      use_git_deployment:
+        description: 'Dev - git based deployment'
+        required: false
+        type: boolean
+        default: false
       
 
 jobs:
@@ -25,8 +30,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for git operations
 
-      - name: Upload files to temporary directory on VPS
+      - name: Upload files to temporary directory on VPS (SCP mode)
+        if: ${{ github.event.inputs.use_git_deployment != 'true' }}
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -48,25 +56,104 @@ jobs:
           script: |
             set -e
 
-            TARGET_DIR="/docker/fail2web"
+            # Determine target directory based on deployment mode
+            USE_GIT="${{ github.event.inputs.use_git_deployment }}"
+            if [[ "$USE_GIT" == "true" ]]; then
+              TARGET_DIR="/docker/fail2web_dev"
+              echo "🔧 Dev mode: using $TARGET_DIR directory"
+            else
+              TARGET_DIR="/docker/fail2web"
+              echo "🔧 Prod mode: using $TARGET_DIR directory"
+            fi
+            
             TEMP_DIR="/tmp/fail2web-deploy-temp"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+            # Extract branch name from ref (e.g., refs/heads/main -> main)
+            CURRENT_BRANCH="${{ github.ref }}"
+            CURRENT_BRANCH="${CURRENT_BRANCH#refs/heads/}"
+
+            # Stop any running containers from the OTHER directory first
+            # (to avoid port conflicts when switching between prod/dev)
+            if [[ "$USE_GIT" == "true" ]]; then
+              # Dev mode: stop prod containers if running
+              PROD_DIR="/docker/fail2web"
+              if [ -d "$PROD_DIR" ] && [ -f "$PROD_DIR/docker-compose.yml" ]; then
+                echo "🛑 Stopping prod containers in $PROD_DIR..."
+                cd "$PROD_DIR" && docker compose down 2>/dev/null || true
+              fi
+            else
+              # Prod mode: stop dev containers if running
+              DEV_DIR="/docker/fail2web_dev"
+              if [ -d "$DEV_DIR" ] && [ -f "$DEV_DIR/docker-compose.yml" ]; then
+                echo "🛑 Stopping dev containers in $DEV_DIR..."
+                cd "$DEV_DIR" && docker compose down 2>/dev/null || true
+              fi
+            fi
 
             # Ensure target exists
             mkdir -p "$TARGET_DIR"
             cd "$TARGET_DIR"
 
-            # Optional cleanup: wipe everything except .env and fail2ban/data
-            if [[ "${{ inputs.cleanup }}" == "true" ]]; then
-              echo "🧹 Cleaning up persistent directories (keeping .env and fail2ban/data)..."
-              find . -mindepth 1 -not -path './.env' -not -path './fail2ban/data*' -delete
+            if [[ "$USE_GIT" == "true" ]]; then
+              echo "🔧 Git-based deployment mode"
+              
+              # Clean up target directory for fresh git clone
+              echo "🧹 Cleaning up $TARGET_DIR for fresh git clone..."
+              find . -mindepth 1 -delete 2>/dev/null || true
+              
+              # Clone fresh repository
+              echo "📦 Cloning repository..."
+              git clone --branch "$CURRENT_BRANCH" "$REPO_URL" .
+              
+              # Copy .env from prod if it doesn't exist
+              PROD_ENV="/docker/fail2web/.env"
+              if [ ! -f .env ] && [ -f "$PROD_ENV" ]; then
+                echo "🔒 Copying .env from prod directory"
+                cp "$PROD_ENV" .env
+              elif [ ! -f .env ]; then
+                echo "❌ .env file missing! Create one manually or copy from prod."
+                exit 1
+              fi
+            else
+              echo "🔧 Standard SCP deployment mode"
+              
+              # Backup .env and fail2ban/data before cleanup (if requested)
+              if [[ "${{ github.event.inputs.cleanup }}" == "true" ]]; then
+                echo "🧹 Cleanup requested for prod deployment"
+                if [ -f .env ]; then
+                  echo "🔒 Backing up .env file"
+                  cp .env .env.backup
+                fi
+                
+                if [ -d fail2ban/data ]; then
+                  echo "🔒 Backing up fail2ban/data directory"
+                  rsync -a fail2ban/data/ fail2ban/data.backup/ 2>/dev/null || true
+                fi
+                
+                # Clean up except backups
+                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -delete
+              fi
+              
+              # Move files from temp to target (fast, atomic-ish)
+              echo "🚚 Moving new files to $TARGET_DIR..."
+              rsync -av --no-perms --no-owner --no-group --exclude='.env' --exclude='fail2ban/data' "$TEMP_DIR"/. ./
+
+              # Clean up temp directory
+              rm -rf "$TEMP_DIR"
+              
+              # Restore .env from backup if cleanup was performed
+              if [ -f .env.backup ]; then
+                echo "🔒 Restoring .env file"
+                mv .env.backup .env
+              fi
+              
+              # Restore fail2ban/data from backup if cleanup was performed
+              if [ -d fail2ban/data.backup ]; then
+                echo "🔒 Restoring fail2ban/data directory"
+                rm -rf fail2ban/data 2>/dev/null || true
+                mv fail2ban/data.backup fail2ban/data
+              fi
             fi
-
-            # Move files from temp to target (fast, atomic-ish)
-            echo "🚚 Moving new files to $TARGET_DIR..."
-            rsync -av --no-perms --no-owner --no-group --exclude='.env' --exclude='fail2ban/data' "$TEMP_DIR"/. ./
-
-            # Clean up temp directory
-            rm -rf "$TEMP_DIR"
 
             # Set permissions
             chmod -R 750 . 2>/dev/null || true
@@ -106,4 +193,12 @@ jobs:
             fi
             echo "✅ Services running"
 
-            echo "🎉 fail2web deployment completed successfully!"
+            if [[ "$USE_GIT" == "true" ]]; then
+              echo "🎉 Dev deployment completed successfully in $TARGET_DIR!"
+              echo "💡 For future changes:"
+              echo "   1. Push changes to GitHub"
+              echo "   2. On VPS: cd /docker/fail2web_dev && git pull"
+              echo "   3. On VPS: docker compose up -d --build"
+            else
+              echo "🎉 Prod deployment completed successfully in $TARGET_DIR!"
+            fi
