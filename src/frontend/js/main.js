@@ -495,15 +495,51 @@ function handleJailFormSubmit(event) {
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
-            // Instant success feedback
-            alert('Jail configuration saved successfully!\n\n' +
-                  (data.jail_active 
+            // Enhanced loading indicator with better visibility
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'jail-loading-overlay';
+            loadingDiv.style.cssText = `
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: rgba(0, 0, 0, 0.9) !important;
+                color: white !important;
+                padding: 40px !important;
+                border-radius: 8px !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 18px !important;
+                font-weight: bold !important;
+                z-index: 10000 !important;
+                text-align: center !important;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+                backdrop-filter: blur(5px) !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            `;
+            loadingDiv.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <div style="font-size: 24px; margin-bottom: 10px;">⚙️ Creating Jail Configuration</div>
+                    <div style="font-size: 16px;">Writing and activating ${jailName}...</div>
+                    <div style="margin-top: 10px; font-size: 14px; opacity: 0.7;">This may take a few seconds</div>
+                </div>
+            `;
+            document.body.appendChild(loadingDiv);
+            
+            // Show success immediately with loading indicator still visible
+            setTimeout(() => {
+                document.body.removeChild(loadingDiv);
+                alert('Jail configuration saved successfully!\n\n' +
+                      (data.jail_active 
                              ? '✅ Jail started and is now active!' 
                              : '⚠️ Config saved. Jail will activate on next reload.'));
-            clearJailForm();
-            loadJailConfigs();
-            renderJailList(); // Refresh active jails
-            fetchJails();     // Refresh main jails view
+                clearJailForm();
+                loadJailConfigs();
+                renderJailList(); // Refresh active jails
+                fetchJails();     // Refresh main jails view
+            }, 1500); // Remove loading after 1.5 seconds
         } else {
             alert('Error saving jail: ' + (data.error || 'Unknown error'));
         }
