@@ -32,14 +32,6 @@
                 <div class="jail-config-container">
                     <div class="jail-form">
                         <h3>Create/Edit Jail</h3>
-                        <div class="template-section">
-                            <label for="jail-template">Template:</label>
-                            <select id="jail-template" onchange="onTemplateChange(this.value)">
-                                <option value="">-- Select Template --</option>
-                                <option value="custom">Custom (configure manually)</option>
-                            </select>
-                            <button type="button" onclick="loadTemplates()" class="refresh-button">Refresh Templates</button>
-                        </div>
                         <form id="jail-form">
                             <div class="form-group">
                                 <label for="jail-name">Jail Name:</label>
@@ -47,8 +39,8 @@
                             </div>
                             <div class="form-group">
                                 <label for="jail-filter">Filter:</label>
-                                <select id="jail-filter" onchange="onFilterChange(this.value)" disabled>
-                                    <option value="">Select template first...</option>
+                                <select id="jail-filter" onchange="onFilterChange(this.value)" required>
+                                    <option value="">Select a filter...</option>
                                 </select>
                                 <input type="text" id="jail-filter-custom" placeholder="Enter custom filter name" style="display: none; margin-top: 0.5rem;">
                                 <div id="filter-content" style="display: none; margin-top: 0.5rem;">

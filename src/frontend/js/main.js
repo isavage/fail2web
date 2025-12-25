@@ -33,54 +33,136 @@ function renderComponents() {
 let jailTemplates = {};
 let ignoreIPList = [];
 
-function onTemplateChange(templateValue) {
-    const filterSelect = document.getElementById('jail-filter');
-    const customFilterInput = document.getElementById('jail-filter-custom');
-    const filterContent = document.getElementById('filter-content');
-    const jailName = document.getElementById('jail-name');
+function showJailConfig() {
+    document.getElementById('jails-section').style.display = 'none';
+    document.getElementById('banned-ips-section').style.display = 'none';
+    document.getElementById('jail-config-section').style.display = 'block';
+    loadJailConfigs();
+    loadIgnoreIP();
     
-    if (templateValue === 'custom') {
-        // Enable manual configuration
-        filterSelect.disabled = false;
-        populateFilterOptions();
-        filterContent.style.display = 'none';
-        
-        // Clear form fields
-        clearJailForm();
-        jailName.disabled = false;
-    } else if (templateValue === '') {
-        // No template selected
-        filterSelect.disabled = true;
-        filterSelect.innerHTML = '<option value="">Select template first...</option>';
-        filterContent.style.display = 'none';
-        clearJailForm();
-        jailName.disabled = true;
-    } else {
-        // Template selected
-        loadTemplate(templateValue);
-        jailName.disabled = false;
-    }
+    // Initialize filter options
+    populateFilterOptions();
 }
 
 function onFilterChange(filterValue) {
     const customFilterInput = document.getElementById('jail-filter-custom');
     const filterContent = document.getElementById('filter-content');
     const filterRegex = document.getElementById('filter-regex');
+    const jailName = document.getElementById('jail-name');
+    const logpathInput = document.getElementById('jail-logpath');
     
     if (filterValue === 'custom') {
         customFilterInput.style.display = 'block';
         customFilterInput.required = true;
         filterContent.style.display = 'none';
+        // Clear defaults for custom
+        jailName.value = '';
+        logpathInput.value = '';
+        resetToDefaults();
     } else if (filterValue === '') {
         customFilterInput.style.display = 'none';
         customFilterInput.required = false;
         filterContent.style.display = 'none';
+        // Clear all fields
+        jailName.value = '';
+        logpathInput.value = '';
+        resetToDefaults();
     } else {
         customFilterInput.style.display = 'none';
         customFilterInput.required = false;
+        // Set smart defaults based on filter
+        setFilterDefaults(filterValue);
         // Load filter content
         loadFilterContent(filterValue);
     }
+}
+
+function setFilterDefaults(filterValue) {
+    const jailName = document.getElementById('jail-name');
+    const logpathInput = document.getElementById('jail-logpath');
+    
+    // Smart defaults for common filters
+    const filterDefaults = {
+        'sshd': {
+            name: 'sshd',
+            logpath: '/var/log/auth.log',
+            maxretry: 3,
+            findtime: 3600,
+            bantime: 600
+        },
+        'nginx': {
+            name: 'nginx',
+            logpath: '/var/log/nginx/access.log',
+            maxretry: 5,
+            findtime: 600,
+            bantime: 3600
+        },
+        'sshd2': {
+            name: 'sshd2',
+            logpath: '/var/log/auth.log',
+            maxretry: 3,
+            findtime: 1800,
+            bantime: 3600
+        },
+        'apache-auth': {
+            name: 'apache-auth',
+            logpath: '/var/log/apache2/error.log',
+            maxretry: 3,
+            findtime: 600,
+            bantime: 1200
+        },
+        'postfix': {
+            name: 'postfix',
+            logpath: '/var/log/mail.log',
+            maxretry: 5,
+            findtime: 600,
+            bantime: 1800
+        },
+        'dovecot': {
+            name: 'dovecot',
+            logpath: '/var/log/dovecot.log',
+            maxretry: 5,
+            findtime: 300,
+            bantime: 900
+        },
+        'vsftpd': {
+            name: 'vsftpd',
+            logpath: '/var/log/vsftpd.log',
+            maxretry: 3,
+            findtime: 600,
+            bantime: 1800
+        },
+        'mysqld': {
+            name: 'mysqld',
+            logpath: '/var/log/mysql/error.log',
+            maxretry: 3,
+            findtime: 600,
+            bantime: 1200
+        }
+    };
+    
+    const defaults = filterDefaults[filterValue] || {
+        name: filterValue,
+        logpath: '/var/log/' + filterValue + '.log',
+        maxretry: 3,
+        findtime: 3600,
+        bantime: 600
+    };
+    
+    // Apply defaults
+    jailName.value = defaults.name;
+    logpathInput.value = defaults.logpath;
+    document.getElementById('jail-maxretry').value = defaults.maxretry;
+    document.getElementById('jail-findtime').value = defaults.findtime;
+    document.getElementById('jail-bantime').value = defaults.bantime;
+}
+
+function resetToDefaults() {
+    document.getElementById('jail-maxretry').value = 3;
+    document.getElementById('jail-findtime').value = 3600;
+    document.getElementById('jail-bantime').value = 600;
+    document.getElementById('jail-action').value = '';
+    document.getElementById('jail-enabled').checked = true;
 }
 
 function loadFilterContent(filterName) {
@@ -174,55 +256,6 @@ function populateFilterOptions() {
         option.textContent = filter.text;
         filterSelect.appendChild(option);
     });
-}
-
-function showJailConfig() {
-    document.getElementById('jails-section').style.display = 'none';
-    document.getElementById('banned-ips-section').style.display = 'none';
-    document.getElementById('jail-config-section').style.display = 'block';
-    loadJailConfigs();
-    loadTemplates();
-    loadIgnoreIP();
-    
-    // Initialize form state
-    document.getElementById('jail-name').disabled = true;
-    document.getElementById('jail-filter').disabled = true;
-}
-
-function loadTemplate(templateName) {
-    const templateSelect = document.getElementById('jail-template');
-    const logpathInput = document.getElementById('jail-logpath');
-    const filterSelect = document.getElementById('jail-filter');
-    const customFilterInput = document.getElementById('jail-filter-custom');
-    const filterContent = document.getElementById('filter-content');
-    
-    if (templateName && jailTemplates[templateName]) {
-        const template = jailTemplates[templateName];
-        
-        // Fill form fields
-        document.getElementById('jail-name').value = templateName.replace('-template', '');
-        document.getElementById('jail-maxretry').value = template.maxretry || 3;
-        document.getElementById('jail-findtime').value = template.findtime || 3600;
-        document.getElementById('jail-bantime').value = template.bantime || 600;
-        document.getElementById('jail-action').value = template.action || '';
-        logpathInput.value = template.logpath || '';
-        
-        // Set filter selection and populate options
-        populateFilterOptions();
-        if (template.filter) {
-            filterSelect.value = template.filter;
-            customFilterInput.style.display = 'none';
-            // Load filter content
-            loadFilterContent(template.filter);
-        } else {
-            filterSelect.value = 'custom';
-            customFilterInput.style.display = 'block';
-            customFilterInput.value = template.filter || '';
-            filterContent.style.display = 'none';
-        }
-        
-        document.getElementById('jail-enabled').checked = template.enabled !== false;
-    }
 }
 
 function hideJailConfig() {

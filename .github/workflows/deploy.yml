@@ -11,8 +11,15 @@ on:
         options:
         - prod-IN
         - prod-NL
+        - dev-IN
+        - dev-NL
       cleanup:
         description: 'Clean up persistent directories before deploying'
+        required: false
+        type: boolean
+        default: false
+      use_git_deployment:
+        description: 'Use git-based deployment (pull from repo instead of SCP) - auto-enabled for dev environments'
         required: false
         type: boolean
         default: false
@@ -25,8 +32,31 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for git operations
 
-      - name: Upload files to temporary directory on VPS
+      - name: Determine deployment method
+        id: deployment_method
+        run: |
+          # Auto-enable git deployment for dev environments unless explicitly disabled
+          if [[ "${{ github.event.inputs.environment }}" == dev-* ]]; then
+            echo "🔧 Dev environment detected, enabling git deployment"
+            echo "use_git=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.inputs.use_git_deployment }}" == "true" ]]; then
+            echo "🔧 Git deployment explicitly requested"
+            echo "use_git=true" >> $GITHUB_OUTPUT
+          else
+            echo "🔧 Using standard SCP deployment"
+            echo "use_git=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Extract branch name from ref (e.g., refs/heads/main -> main)
+          BRANCH_NAME="${{ github.ref }}"
+          BRANCH_NAME="${BRANCH_NAME#refs/heads/}"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Upload files to temporary directory on VPS (SCP mode)
+        if: steps.deployment_method.outputs.use_git == 'false'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -50,23 +80,60 @@ jobs:
 
             TARGET_DIR="/docker/fail2web"
             TEMP_DIR="/tmp/fail2web-deploy-temp"
+            USE_GIT="${{ steps.deployment_method.outputs.use_git }}"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+            CURRENT_BRANCH="${{ env.BRANCH_NAME }}"
 
             # Ensure target exists
             mkdir -p "$TARGET_DIR"
             cd "$TARGET_DIR"
 
             # Optional cleanup: wipe everything except .env and fail2ban/data
-            if [[ "${{ inputs.cleanup }}" == "true" ]]; then
+            if [[ "${{ github.event.inputs.cleanup }}" == "true" ]]; then
               echo "🧹 Cleaning up persistent directories (keeping .env and fail2ban/data)..."
               find . -mindepth 1 -not -path './.env' -not -path './fail2ban/data*' -delete
             fi
 
-            # Move files from temp to target (fast, atomic-ish)
-            echo "🚚 Moving new files to $TARGET_DIR..."
-            rsync -av --no-perms --no-owner --no-group --exclude='.env' --exclude='fail2ban/data' "$TEMP_DIR"/. ./
+            if [[ "$USE_GIT" == "true" ]]; then
+              echo "🔧 Git-based deployment mode"
+              
+              # Check if git repo already exists
+              if [ -d .git ]; then
+                echo "📦 Existing git repository found, pulling latest changes..."
+                git fetch origin
+                git checkout "$CURRENT_BRANCH"
+                git pull origin "$CURRENT_BRANCH"
+              else
+                echo "📦 Cloning repository..."
+                git clone --branch "$CURRENT_BRANCH" "$REPO_URL" .
+              fi
+              
+              # Ensure .env is preserved (not tracked in git)
+              if [ -f .env ]; then
+                echo "🔒 Preserving existing .env file"
+                cp .env .env.backup
+                git checkout -- .env 2>/dev/null || true
+                mv .env.backup .env
+              fi
+              
+              # Ensure fail2ban/data is preserved
+              if [ -d fail2ban/data ]; then
+                echo "🔒 Preserving fail2ban/data directory"
+                rsync -a fail2ban/data/ fail2ban/data.backup/
+                git checkout -- fail2ban/data 2>/dev/null || true
+                rsync -a fail2ban/data.backup/ fail2ban/data/
+                rm -rf fail2ban/data.backup
+              fi
+            else
+              echo "🔧 Standard SCP deployment mode"
+              
+              # Move files from temp to target (fast, atomic-ish)
+              echo "🚚 Moving new files to $TARGET_DIR..."
+              rsync -av --no-perms --no-owner --no-group --exclude='.env' --exclude='fail2ban/data' "$TEMP_DIR"/. ./
 
-            # Clean up temp directory
-            rm -rf "$TEMP_DIR"
+              # Clean up temp directory
+              rm -rf "$TEMP_DIR"
+            fi
 
             # Set permissions
             chmod -R 750 . 2>/dev/null || true
@@ -106,4 +173,9 @@ jobs:
             fi
             echo "✅ Services running"
 
-            echo "🎉 fail2web deployment completed successfully!"
+            if [[ "$USE_GIT" == "true" ]]; then
+              echo "🎉 Git-based deployment completed successfully!"
+              echo "💡 For future changes: push to repo and run 'cd /docker/fail2web && git pull && docker compose up -d --build' on VPS"
+            else
+              echo "🎉 fail2web deployment completed successfully!"
+            fi
