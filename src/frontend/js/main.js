@@ -482,47 +482,28 @@ function handleJailFormSubmit(event) {
         return;
     }
 
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + getToken()
+    };
+
     fetch('/api/jails/config', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getToken()
-        },
+        headers: headers,
         body: JSON.stringify(formData)
     })
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
-            // Show loading indicator
-            const loadingDiv = document.createElement('div');
-            loadingDiv.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(0, 0, 0, 0.8);
-                color: white;
-                padding: 20px;
-                border-radius: 8px;
-                font-family: Arial, sans-serif;
-                font-size: 16px;
-                z-index: 1000;
-                text-align: center;
-            `;
-            loadingDiv.innerHTML = '<div>Creating and activating jail...</div>';
-            document.body.appendChild(loadingDiv);
-            
-            setTimeout(() => {
-                document.body.removeChild(loadingDiv);
-                alert('Jail configuration saved successfully!\n\n' +
-                      (data.jail_active 
-                             ? 'Jail started and is now active.' 
-                             : 'Config saved. Jail will start on next reload or restart.'));
-                clearJailForm();
-                loadJailConfigs();
-                renderJailList(); // Refresh active jails
-                fetchJails();     // Refresh main jails view
-            }, 2000); // Remove loading after 2 seconds
+            // Instant success feedback
+            alert('Jail configuration saved successfully!\n\n' +
+                  (data.jail_active 
+                             ? '✅ Jail started and is now active!' 
+                             : '⚠️ Config saved. Jail will activate on next reload.'));
+            clearJailForm();
+            loadJailConfigs();
+            renderJailList(); // Refresh active jails
+            fetchJails();     // Refresh main jails view
         } else {
             alert('Error saving jail: ' + (data.error || 'Unknown error'));
         }
@@ -647,6 +628,54 @@ function toggleJail(jailName, currentlyEnabled) {
     });
 }
 
+function deleteJailConfig(jailName) {
+    if (!confirm(`Are you sure you want to delete jail ${jailName}? This will stop the jail and remove its configuration.`)) return;
+    
+    // Show instant loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
+        font-size: 16px;
+        z-index: 1000;
+        text-align: center;
+    `;
+    loadingDiv.innerHTML = '<div>Deleting jail and stopping service...</div>';
+    document.body.appendChild(loadingDiv);
+    
+    const headers = {
+        'Authorization': 'Bearer ' + getToken()
+    };
+
+    fetch(`/api/jails/config/${jailName}`, {
+        method: 'DELETE',
+        headers: headers
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.body.removeChild(loadingDiv);
+        if (data.status === 'success') {
+            alert(`✅ Jail ${jailName} deleted successfully!`);
+            loadJailConfigs();
+            renderJailList(); // Refresh active jails
+            fetchJails();     // Refresh main jails view
+        } else {
+            alert('Error deleting jail: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        document.body.removeChild(loadingDiv);
+        alert('Network error while deleting jail');
+    });
+}
+
 function deleteJail(jailName) {
     if (confirm(`Are you sure you want to delete the jail "${jailName}"?`)) {
         fetch(`/api/jails/config/${jailName}`, {
@@ -672,6 +701,7 @@ function deleteJail(jailName) {
     }
 }
 
+// ... (rest of the code remains the same)
 // Existing functions (modified to work with new structure)
 function renderJailList() {
     fetch('/api/jails', {
