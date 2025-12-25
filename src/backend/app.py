@@ -248,7 +248,9 @@ def create_jail_config():
         
     except Exception as e:
         logger.error(f"Error creating jail config: {str(e)}")
-        return add_cors_headers(jsonify({'error': str(e)}), 500)
+        response = jsonify({'error': str(e)})
+        response.status_code = 500
+        return add_cors_headers(response)
 
 def write_config_file(filepath, data):
     """Write configuration file with proper format"""
@@ -305,7 +307,9 @@ def delete_jail_config(jail_name):
         
     except Exception as e:
         logger.error(f"Error deleting jail config: {str(e)}")
-        return add_cors_headers(jsonify({'error': str(e)}), 500)
+        response = jsonify({'error': str(e)})
+        response.status_code = 500
+        return add_cors_headers(response)
 
 @app.route('/api/jails/<jail_name>/start', methods=['POST'])
 @token_required
