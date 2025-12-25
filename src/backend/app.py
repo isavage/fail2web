@@ -100,46 +100,61 @@ def fail2ban_command(cmd):
         if cmd == 'status':
             lines = stdout.split('\n')
             jails = []
+            
+            # First, try to extract from "Jail list:" line
             for line in lines:
                 line = line.strip()
-                # Skip empty lines and status lines
                 if not line:
                     continue
-                
-                # Skip common status lines (case insensitive)
-                line_lower = line.lower()
-                if (line_lower.startswith('number of jail') or 
-                    line_lower.startswith('status') or
-                    line_lower.startswith('jail list') or
-                    'total' in line_lower or
-                    ':' in line):  # Skip any key:value status lines
-                    continue
-                
-                # Parse jail names from lines like "1-sshd"
-                if '-' in line:
-                    parts = line.split('-')
-                    if len(parts) >= 2:
-                        jail_name = parts[1].strip()
-                        # Filter out non-jail names
-                        if (jail_name and 
-                            jail_name.lower() not in ['-', 'total', 'number', 'jail'] and
-                            not jail_name.startswith('Jail') and
-                            ':' not in jail_name):
-                            jails.append(jail_name)
-                # Also check for standalone jail names (without number prefix)
-                elif line and line.lower() not in ['-', 'total', 'number', 'jail']:
-                    # Make sure it's not a status line
-                    if (not line.startswith('Jail') and 
-                        ':' not in line and
-                        not any(word in line.lower() for word in ['list', 'status', 'number'])):
-                        jails.append(line)
+                    
+                # Look for "Jail list:" line which contains all jails
+                if line.lower().startswith('jail list:'):
+                    # Extract everything after "Jail list:"
+                    jail_list_part = line.split(':', 1)[1].strip()
+                    # Split by spaces, commas, or tabs to get individual jail names
+                    import re
+                    jail_names = re.split(r'[,\s\t]+', jail_list_part)
+                    for jail in jail_names:
+                        if jail and jail.lower() not in ['', 'none', 'jails']:
+                            jails.append(jail)
+                    break  # Found jail list line, we're done
+            
+            # If no "Jail list:" line found, try other parsing methods
+            if not jails:
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    # Skip header lines
+                    line_lower = line.lower()
+                    if (line_lower.startswith('number of jail') or 
+                        line_lower.startswith('status') or
+                        'total' in line_lower):
+                        continue
+                    
+                    # Try to parse jail names from various formats
+                    
+                    # Format 1: "1-sshd" (numbered list)
+                    if '-' in line:
+                        parts = line.split('-')
+                        if len(parts) >= 2:
+                            jail_name = parts[1].strip()
+                            if jail_name and jail_name.lower() not in ['-', 'total', 'number', 'jail']:
+                                jails.append(jail_name)
+                    
+                    # Format 2: Just a jail name (like "sshd")
+                    elif line and line.lower() not in ['-', 'total', 'number', 'jail']:
+                        # Make sure it looks like a jail name (no special chars)
+                        if re.match(r'^[a-zA-Z0-9_-]+$', line):
+                            jails.append(line)
             
             # Remove duplicates and return
             unique_jails = []
             for jail in jails:
-                if jail not in unique_jails:
+                if jail and jail not in unique_jails:
                     unique_jails.append(jail)
-            return unique_jails
+            return unique_jails if unique_jails else []
         
         return stdout
     except FileNotFoundError:
