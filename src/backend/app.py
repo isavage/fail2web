@@ -68,9 +68,8 @@ def token_required(f):
         try:
             decoded = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             logger.info(f"Token decoded successfully: {decoded}")
-            if datetime.utcnow() > decoded['exp']:
-                logger.warning(f"Token has expired. Exp: {decoded['exp']}, Now: {datetime.utcnow()}")
-                return jsonify({'error': 'Token has expired'}), 401
+            # PyJWT automatically validates expiration when decode() is called
+            # No need for manual expiration check
         except jwt.ExpiredSignatureError as e:
             logger.error(f"Token expired: {str(e)}")
             return jsonify({'error': 'Token has expired'}), 401
