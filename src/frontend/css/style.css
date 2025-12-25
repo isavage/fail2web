@@ -424,29 +424,35 @@ header {
 .clear-button {
     background: #718096;
     color: white;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background-color 0.2s;
 }
 
 .clear-button:hover {
-    background: #4a5568;
+background: #4a5568;
+}
+
+.jail-config-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
 }
 
 .jail-config-item {
     background: var(--background-color);
     padding: 1rem;
     border-radius: 6px;
-    margin-bottom: 0.75rem;
     border-left: 4px solid var(--secondary-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.jail-config-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .jail-config-item.disabled {
-    border-left-color: #718096;
-    opacity: 0.7;
+border-left-color: #718096;
+opacity: 0.7;
 }
 
 .jail-config-header {
