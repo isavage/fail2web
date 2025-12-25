@@ -118,7 +118,7 @@ def login():
             }, app.config['JWT_SECRET_KEY'])
             
             return jsonify({
-                'token': token.decode(),
+                'token': token,
                 'expires_in': '24 hours'
             })
         else:
