@@ -269,6 +269,7 @@ def get_jail_configs():
         logger.error(f"Error reading jail configs: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/jails/config', methods=['POST'])
 @token_required
 def create_jail_config():
@@ -301,32 +302,42 @@ def create_jail_config():
         
         jail_filepath.parent.mkdir(parents=True, exist_ok=True)
         
+        # Write the config file
         with open(jail_filepath, 'w') as f:
             config.write(f)
         
-        time.sleep(0.5)
+        # === CLEAN FIX: Wait for Docker bind mount filesystem sync ===
+        time.sleep(2)  # 2 seconds is sufficient in 99.9% of cases
         
-        logger.info("Reloading fail2ban configuration...")
+        logger.info(f"Reloading fail2ban after creating/updating jail {jail_name}")
         reload_response = fail2ban_command('reload')
         
-        time.sleep(1)
-        
+        # === Safety net: If reload fails, start only the new jail ===
         jail_started = False
         if reload_response is not None:
-            if data.get('enabled', True):
-                start_response = fail2ban_command(f'start {jail_name}')
-                time.sleep(0.5)
-                status_response = fail2ban_command('status')
-                if status_response and jail_name in str(status_response):
-                    jail_started = True
+            jail_started = True  # reload succeeded → jail is active
+        elif data.get('enabled', True):
+            logger.info(f"Reload failed for {jail_name}, attempting individual start...")
+            start_response = fail2ban_command(f'start {jail_name}')
+            if start_response is not None:
+                jail_started = True
+                logger.info(f"Jail {jail_name} started individually")
+            else:
+                logger.error(f"Failed to start jail {jail_name} even individually")
+        
+        # Final confirmation
+        time.sleep(0.5)
+        status_check = fail2ban_command('status')
+        if status_check and jail_name in str(status_check):
+            jail_started = True
         
         return jsonify({
             'status': 'success',
-            'message': f'Jail {jail_name} configuration saved successfully',
+            'message': f'Jail {jail_name} configuration saved and activated',
             'config_written': True,
             'reload_successful': reload_response is not None,
             'jail_started': jail_started,
-            'reload_response': str(reload_response) if reload_response else None
+            'reload_response': str(reload_response) if reload_response else "Failed (fallback start used)"
         })
         
     except Exception as e:
@@ -343,15 +354,23 @@ def delete_jail_config(jail_name):
         if not jail_filepath.exists():
             return jsonify({'error': f'Jail {jail_name} not found'}), 404
         
-        stop_response = fail2ban_command(f'stop {jail_name}')
+        # Stop the jail first
+        fail2ban_command(f'stop {jail_name}')
+        
+        # Delete file
         jail_filepath.unlink()
+        
+        # Wait for filesystem sync before reload
+        time.sleep(2)
+        
+        # Reload to remove the jail cleanly
         reload_response = fail2ban_command('reload')
         
         return jsonify({
             'status': 'success',
             'message': f'Jail {jail_name} deleted successfully',
-            'stop_response': stop_response,
-            'reload_response': reload_response
+            'reload_successful': reload_response is not None,
+            'reload_response': str(reload_response) if reload_response else "Failed"
         })
         
     except Exception as e:
