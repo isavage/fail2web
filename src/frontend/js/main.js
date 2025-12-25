@@ -785,28 +785,73 @@ function deleteJailConfig(jailName) {
 }
 
 function deleteJail(jailName) {
-    if (confirm(`Are you sure you want to delete the jail "${jailName}"?`)) {
-        fetch(`/api/jails/config/${jailName}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': 'Bearer ' + getToken()
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('Jail deleted successfully');
-                loadJailConfigs();
-                renderJailList(); // Refresh active jails
-            } else {
-                alert('Error: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error deleting jail:', error);
-            alert('Error deleting jail');
-        });
-    }
+    if (!confirm(`Are you sure you want to delete the jail "${jailName}"?`)) return;
+    
+    // Show loading indicator instantly - smaller centered block
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'jail-delete-loading-overlay';
+    loadingDiv.style.cssText = `
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 300px !important;
+        min-height: 120px !important;
+        background: rgba(0, 0, 0, 0.85) !important;
+        color: white !important;
+        padding: 20px !important;
+        border-radius: 12px !important;
+        font-family: Arial, sans-serif !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+        z-index: 10000 !important;
+        text-align: center !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+        backdrop-filter: blur(10px) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    `;
+    loadingDiv.innerHTML = `
+        <div style="margin-bottom: 10px; font-size: 24px;">🗑️</div>
+        <div style="font-size: 16px; margin-bottom: 5px;">Deleting Jail</div>
+        <div style="font-size: 14px; opacity: 0.8;">Stopping and removing ${jailName}...</div>
+        <div style="margin-top: 8px; font-size: 12px; opacity: 0.6;">Please wait</div>
+    `;
+    document.body.appendChild(loadingDiv);
+
+    fetch(`/api/jails/config/${jailName}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': 'Bearer ' + getToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Remove loading indicator
+        if (document.body.contains(loadingDiv)) {
+            document.body.removeChild(loadingDiv);
+        }
+        
+        if (data.status === 'success') {
+            alert('✅ Jail deleted successfully');
+            loadJailConfigs();
+            renderJailList(); // Refresh active jails
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        // Remove loading indicator on error too
+        if (document.body.contains(loadingDiv)) {
+            document.body.removeChild(loadingDiv);
+        }
+        
+        console.error('Error deleting jail:', error);
+        alert('Error deleting jail');
+    });
 }
 
 // ... (rest of the code remains the same)
