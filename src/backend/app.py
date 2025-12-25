@@ -286,13 +286,17 @@ def create_jail_config():
             if not data.get(field):
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Validate log path exists
+        # Validate log path exists (with more lenient check)
         logpath = data['logpath']
+        logger.info(f"Checking log path: {logpath}")
+        
         if not os.path.exists(logpath):
-            return jsonify({
-                'error': f'Log file not found: {logpath}',
-                'suggestion': 'Make sure the log path is accessible inside the container. Check docker-compose.yml volume mounts.'
-            }), 400
+            logger.warning(f"Log file not found: {logpath}")
+            # Don't fail the request, just warn and continue
+            # return jsonify({
+            #     'error': f'Log file not found: {logpath}',
+            #     'suggestion': 'Make sure the log path is accessible inside the container. Check docker-compose.yml volume mounts.'
+            # }), 400
         
         jail_name = data['name']
         jail_filename = f"{jail_name}.local"
