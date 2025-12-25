@@ -38,10 +38,8 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get('Authorization')
-        logger.info(f"Auth header received: {auth_header}")
         
         if not auth_header:
-            logger.warning("No Authorization header found")
             return jsonify({'error': 'Token is missing'}), 401
         
         # Extract token from "Bearer <token>" format or handle direct token
@@ -55,35 +53,22 @@ def token_required(f):
                 # Direct token without prefix
                 token = auth_header
         except Exception as e:
-            logger.error(f"Error extracting token: {str(e)}")
             return jsonify({'error': 'Invalid token format'}), 401
         
-        logger.info(f"Extracted token: {token[:50]}..." if len(token) > 50 else f"Extracted token: {token}")
-        logger.info(f"JWT Secret Key being used: {app.config['JWT_SECRET_KEY'][:10]}...")
-        
         if not token:
-            logger.warning("Empty token extracted")
             return jsonify({'error': 'Token is empty'}), 401
         
         try:
             decoded = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
-            logger.info(f"Token decoded successfully: {decoded}")
             # PyJWT automatically validates expiration when decode() is called
-            # No need for manual expiration check
-        except jwt.ExpiredSignatureError as e:
-            logger.error(f"Token expired: {str(e)}")
+        except jwt.ExpiredSignatureError:
             return jsonify({'error': 'Token has expired'}), 401
-        except jwt.InvalidTokenError as e:
-            logger.error(f"Invalid token error: {str(e)}")
-            return jsonify({'error': f'Invalid token: {str(e)}'}), 401
-        except Exception as e:
-            logger.error(f"Token validation error: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            return jsonify({'error': f'Token validation failed: {str(e)}'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except Exception:
+            return jsonify({'error': 'Token validation failed'}), 401
         
         g.current_user = decoded['sub']
-        logger.info(f"Token validated successfully for user: {g.current_user}")
         return f(*args, **kwargs)
     return decorated
 
@@ -590,6 +575,33 @@ def unban_ip():
         return jsonify({'status': 'success', 'message': response})
     except Exception as e:
         logger.error(f"Error unbanning IP: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/filters/<filter_name>')
+@token_required
+def get_filter_content(filter_name):
+    try:
+        # Path to filter configuration files
+        filter_path = Path('/data/filter.d') / f'{filter_name}.conf'
+        
+        if not filter_path.exists():
+            # Try without .conf extension
+            filter_path = Path('/data/filter.d') / filter_name
+            if not filter_path.exists():
+                return jsonify({'error': f'Filter {filter_name} not found'}), 404
+        
+        # Read filter content
+        with open(filter_path, 'r') as f:
+            content = f.read()
+        
+        return jsonify({
+            'status': 'success',
+            'content': content,
+            'filter': filter_name
+        })
+        
+    except Exception as e:
+        logger.error(f"Error reading filter {filter_name}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/verify-token')

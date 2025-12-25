@@ -174,7 +174,17 @@ function loadFilterContent(filterName) {
             'Authorization': 'Bearer ' + getToken()
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            // Handle non-200 responses
+            if (response.status === 404) {
+                console.warn(`Filter ${filterName} not found on server`);
+                return { status: 'not_found', content: `Filter configuration for ${filterName} is not available. Using default settings.` };
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.status === 'success') {
             const filterContent = document.getElementById('filter-content');
@@ -182,10 +192,20 @@ function loadFilterContent(filterName) {
             
             filterRegex.value = data.content;
             filterContent.style.display = 'block';
+        } else if (data.status === 'not_found') {
+            // Filter not found, show warning but don't display content
+            console.warn(data.content);
+            // Optionally show a message to the user
+            const filterContent = document.getElementById('filter-content');
+            filterContent.style.display = 'none';
         }
     })
     .catch(error => {
         console.error('Error loading filter content:', error);
+        // Don't show error to user for filter loading failures
+        // Just hide the filter content section
+        const filterContent = document.getElementById('filter-content');
+        filterContent.style.display = 'none';
     });
 }
 
