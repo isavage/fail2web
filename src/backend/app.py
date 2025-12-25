@@ -302,16 +302,30 @@ def create_jail_config():
         time.sleep(2)
         
         # Start fail2ban (will auto-read new configs)
-        start_response = fail2ban_command('start')
+        start_response = fail2ban_command(f'start {jail_name}')
         if start_response is None:
             logger.error("Failed to start fail2ban")
+            return jsonify({'error': f'Failed to start jail {jail_name}'}), 500
         
-        # Wait for startup
+        logger.info(f"Start jail response: {start_response}")
+        
+        # Wait for startup and verify
         time.sleep(3)
-        
-        # Verify jail is active
         status_response = fail2ban_command('status')
         jail_active = jail_name in str(status_response) if status_response else False
+        
+        logger.info(f"Status check response: {status_response}")
+        logger.info(f"Jail active: {jail_active}")
+        
+        if not jail_active:
+            logger.error(f"Jail {jail_name} failed to start. Checking jail status...")
+            jail_status = fail2ban_command(f'status {jail_name}')
+            logger.error(f"Individual jail status: {jail_status}")
+            
+            # Try alternative start method
+            logger.info("Trying alternative start method...")
+            alt_start_response = fail2ban_command(f'start {jail_name} --once')
+            logger.info(f"Alternative start response: {alt_start_response}")
         
         return jsonify({
             'status': 'success',
@@ -319,6 +333,7 @@ def create_jail_config():
             'jail_active': jail_active,
             'stop_response': str(stop_response),
             'start_response': str(start_response),
+            'alt_start_response': str(alt_start_response) if not jail_active else "Not needed",
             'status_response': str(status_response)
         })
         
@@ -343,6 +358,18 @@ def write_config_file(filepath, data):
     
     if data.get('action'):
         config.set(jail_name, 'action', data['action'])
+    
+    # Ensure directory exists
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(filepath, 'w') as f:
+        config.write(f)
+    
+    # Log the final configuration for debugging
+    logger.info(f"Configuration written to {filepath}:")
+    with open(filepath, 'r') as f:
+        config_content = f.read()
+        logger.info(f"Configuration content:\n{config_content}")
     
     # Ensure directory exists
     filepath.parent.mkdir(parents=True, exist_ok=True)
