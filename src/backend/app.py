@@ -336,18 +336,18 @@ def create_jail_config():
         import time
         time.sleep(0.5)
         
-        # Reload fail2ban to apply changes - try different reload methods
+        # Reload fail2ban to apply changes - use correct reload method
         logger.info("Attempting to reload fail2ban configuration...")
         
-        # Method 1: Standard reload
-        reload_response = fail2ban_command('reload')
-        logger.info(f"Standard reload response: {reload_response}")
+        # Method 1: Reload the specific jail (correct approach)
+        reload_response = fail2ban_command(f'reload {jail_name}')
+        logger.info(f"Jail-specific reload response: {reload_response}")
         
-        # Method 2: If standard reload doesn't work, try reload with specific jail
+        # Method 2: If that doesn't work, try full reload with restart
         if 'sshd2' not in str(reload_response):
-            logger.info("Trying jail-specific reload...")
-            jail_reload_response = fail2ban_command(f'reload {jail_name}')
-            logger.info(f"Jail-specific reload response: {jail_reload_response}")
+            logger.info("Trying full reload with restart...")
+            full_reload_response = fail2ban_command('reload --restart')
+            logger.info(f"Full reload with restart response: {full_reload_response}")
         
         # Wait a moment for fail2ban to process the reload
         time.sleep(1)
