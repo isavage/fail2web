@@ -414,65 +414,8 @@ function saveIgnoreIP() {
     });
 }
 
-function loadTemplates() {
-    authenticatedFetch('/api/jails/templates')
-        .then(data => {
-            if (data.templates) {
-                jailTemplates = data.templates;
-                populateTemplateSelect();
-            }
-        })
-        .catch(error => {
-            console.error('Error loading templates:', error);
-            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
-                alert('Error loading templates: ' + error.message);
-            }
-        });
-}
-
-function populateTemplateSelect() {
-    const select = document.getElementById('jail-template');
-    // Keep the existing options and add templates
-    select.innerHTML = '<option value="">-- Select Template --</option><option value="custom">Custom (configure manually)</option>';
-    
-    Object.keys(jailTemplates).forEach(templateName => {
-        const option = document.createElement('option');
-        option.value = templateName;
-        option.textContent = templateName.replace('-template', '').charAt(0).toUpperCase() + 
-                           templateName.replace('-template', '').slice(1);
-        select.appendChild(option);
-    });
-}
-
-function loadTemplate(templateName) {
-    const templateSelect = document.getElementById('jail-template');
-    const logpathInput = document.getElementById('jail-logpath');
-    const filterSelect = document.getElementById('jail-filter');
-    const customFilterInput = document.getElementById('jail-filter-custom');
-    
-    if (templateName && jailTemplates[templateName]) {
-        const template = jailTemplates[templateName];
-        
-        // Fill form fields
-        document.getElementById('jail-maxretry').value = template.maxretry || 3;
-        document.getElementById('jail-findtime').value = template.findtime || 3600;
-        document.getElementById('jail-bantime').value = template.bantime || 600;
-        document.getElementById('jail-action').value = template.action || '';
-        logpathInput.value = template.logpath || '';
-        
-        // Set filter selection
-        if (template.filter) {
-            filterSelect.value = template.filter;
-            customFilterInput.style.display = 'none';
-        } else {
-            filterSelect.value = 'custom';
-            customFilterInput.style.display = 'block';
-            customFilterInput.value = template.filter || '';
-        }
-        
-        document.getElementById('jail-enabled').checked = template.enabled !== false;
-    }
-}
+// Template functionality removed - not used in current implementation
+// Jail creation uses smart defaults and manual configuration instead
 
 function handleJailFormSubmit(event) {
     event.preventDefault();

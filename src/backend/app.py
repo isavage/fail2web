@@ -415,79 +415,8 @@ def reload_fail2ban():
         logger.error(f"Error reloading fail2ban: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/jails/templates', methods=['GET'])
-@token_required
-def get_jail_templates():
-    try:
-        templates_path = '/data/jail-templates.conf'
-        if not Path(templates_path).exists():
-            return jsonify({'error': 'No templates available'}), 404
-        
-        templates = {}
-        config = configparser.ConfigParser()
-        config.read(templates_path)
-        
-        for section_name in config.sections():
-            templates[section_name] = dict(config[section_name])
-        
-        return jsonify(templates)
-        
-    except Exception as e:
-        logger.error(f"Error getting jail templates: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/jails/create-from-template', methods=['POST'])
-@token_required
-def create_jail_from_template():
-    try:
-        data = request.get_json()
-        template_name = data.get('template')
-        jail_name = data.get('jail_name')
-        custom_params = data.get('custom_params', {})
-        
-        if not template_name or not jail_name:
-            return jsonify({'error': 'Template name and jail name are required'}), 400
-        
-        templates_path = '/data/jail-templates.conf'
-        if not Path(templates_path).exists():
-            return jsonify({'error': 'No templates available'}), 404
-        
-        config = configparser.ConfigParser()
-        config.read(templates_path)
-        
-        if template_name not in config:
-            return jsonify({'error': f'Template {template_name} not found'}), 404
-        
-        jail_config = dict(config[template_name])
-        jail_config.update(custom_params)
-        
-        jail_filename = f"{jail_name}.local"
-        jail_filepath = Path(jail_d_path) / jail_filename
-        
-        jail_config_parser = configparser.ConfigParser()
-        jail_config_parser['DEFAULT']['include'] = '/data/jail.d/ignoreip.conf'
-        
-        jail_config_parser.add_section(jail_name)
-        
-        for key, value in jail_config.items():
-            jail_config_parser.set(jail_name, key, str(value))
-        
-        jail_filepath.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(jail_filepath, 'w') as f:
-            jail_config_parser.write(f)
-        
-        reload_response = fail2ban_command('reload')
-        
-        return jsonify({
-            'status': 'success',
-            'message': f'Jail {jail_name} created from template',
-            'reload_response': str(reload_response) if reload_response else "Failed"
-        })
-        
-    except Exception as e:
-        logger.error(f"Error creating jail from template: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+# Template functionality removed - not used in current implementation
+# Jail creation uses smart defaults and manual configuration instead
 
 @app.route('/api/ignoreip', methods=['GET'])
 @token_required
