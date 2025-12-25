@@ -52,6 +52,7 @@ def token_required(f):
         
         g.current_user = decoded['sub']
         return f(*args, **kwargs)
+    return decorated
 
 def fail2ban_command(cmd):
     try:
