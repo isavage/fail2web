@@ -526,10 +526,32 @@ def get_ignoreip():
     try:
         ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
         
-        # If file doesn't exist, return empty list (not 404)
+        # If file doesn't exist, create it with default IPs
         if not ignoreip_file.exists():
-            return jsonify({'ignoreip': []})
+            logger.info(f"ignoreIP.conf doesn't exist, creating with defaults")
+            
+            # Default IPs that should never be banned
+            default_ips = [
+                '127.0.0.1/8',    # localhost
+                '::1',            # IPv6 localhost
+                '192.168.0.0/16', # private network
+                '10.0.0.0/8',     # private network
+                '172.16.0.0/12'   # private network
+            ]
+            
+            config = configparser.ConfigParser()
+            ignoreip_text = '\n            '.join(default_ips)
+            config['DEFAULT']['ignoreip'] = ignoreip_text
+            
+            ignoreip_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(ignoreip_file, 'w') as f:
+                config.write(f)
+            
+            logger.info(f"Created ignoreIP.conf with {len(default_ips)} default IPs")
+            return jsonify({'ignoreip': default_ips})
         
+        # File exists, read it
         config = configparser.ConfigParser(interpolation=None)
         config.read(ignoreip_file)
         
