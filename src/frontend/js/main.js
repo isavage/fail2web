@@ -81,27 +81,26 @@ function setFilterDefaults(filterValue) {
     const jailName = document.getElementById('jail-name');
     const logpathInput = document.getElementById('jail-logpath');
     
-    // Smart defaults for common filters
     const filterDefaults = {
         'sshd': {
             name: 'sshd',
-            logpath: '%(syslog_authpriv)s',  // Use fail2ban variable instead of hardcoded path
+            logpath: '%(syslog_authpriv)s',
             maxretry: 3,
             findtime: 3600,
             bantime: 600
+        },
+        'sshd2': {
+            name: 'sshd2',
+            logpath: '%(syslog_authpriv)s',
+            maxretry: 3,
+            findtime: 1800,
+            bantime: 3600
         },
         'nginx': {
             name: 'nginx',
             logpath: '/var/log/nginx/access.log',
             maxretry: 5,
             findtime: 600,
-            bantime: 3600
-        },
-        'sshd2': {
-            name: 'sshd2',
-            logpath: '%(syslog_authpriv)s',  // Use fail2ban variable instead of hardcoded path
-            maxretry: 3,
-            findtime: 1800,
             bantime: 3600
         },
         'apache-auth': {
@@ -149,12 +148,16 @@ function setFilterDefaults(filterValue) {
         bantime: 600
     };
     
-    // Apply defaults
     jailName.value = defaults.name;
     logpathInput.value = defaults.logpath;
     document.getElementById('jail-maxretry').value = defaults.maxretry;
     document.getElementById('jail-findtime').value = defaults.findtime;
     document.getElementById('jail-bantime').value = defaults.bantime;
+
+    // Hint for sshd users
+    if (filterValue === 'sshd' || filterValue === 'sshd2') {
+        console.log('%cNote: This jail will automatically use backend=systemd for better reliability in containers', 'color: green; font-weight: bold;');
+    }
 }
 
 function resetToDefaults() {
@@ -445,9 +448,18 @@ function handleJailFormSubmit(event) {
     const filterSelect = document.getElementById('jail-filter');
     const customFilterInput = document.getElementById('jail-filter-custom');
     
+    let filterValue = filterSelect.value;
+    if (filterValue === 'custom') {
+        filterValue = customFilterInput.value.trim();
+        if (!filterValue) {
+            alert('Please specify a custom filter name');
+            return;
+        }
+    }
+
     const formData = {
-        name: document.getElementById('jail-name').value,
-        filter: filterSelect.value === 'custom' ? customFilterInput.value : filterSelect.value,
+        name: document.getElementById('jail-name').value.trim(),
+        filter: filterValue,
         logpath: document.getElementById('jail-logpath').value,
         maxretry: parseInt(document.getElementById('jail-maxretry').value),
         findtime: parseInt(document.getElementById('jail-findtime').value),
@@ -455,7 +467,21 @@ function handleJailFormSubmit(event) {
         action: document.getElementById('jail-action').value,
         enabled: document.getElementById('jail-enabled').checked
     };
-    
+
+    // === AUTOMATIC FIX: Force systemd backend for SSH jails ===
+    // This prevents the "Have not found any log file for sshd jail" error during reload
+    if (formData.filter === 'sshd' || formData.filter === 'sshd2') {
+        // Inject backend = systemd directly into the config
+        // Our backend supports this via custom parameters in jail.local
+        formData.backend = 'systemd';
+    }
+
+    // Basic validation
+    if (!formData.name || !formData.filter || !formData.logpath) {
+        alert('Please fill in all required fields: Name, Filter, and Log Path');
+        return;
+    }
+
     fetch('/api/jails/config', {
         method: 'POST',
         headers: {
@@ -467,17 +493,21 @@ function handleJailFormSubmit(event) {
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
-            alert('Jail configuration saved successfully!');
+            alert('Jail configuration saved successfully!\n\n' +
+                  (data.jail_started 
+                     ? 'Jail started and is now active.' 
+                     : 'Config saved. Jail will start on next reload or restart.'));
             clearJailForm();
             loadJailConfigs();
-            renderJailList(); // Refresh active jails
+            renderJailList(); // Refresh active jails list
+            fetchJails();     // Refresh the main jails view
         } else {
-            alert('Error: ' + data.error);
+            alert('Error saving jail: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
         console.error('Error saving jail config:', error);
-        alert('Error saving jail configuration');
+        alert('Network error while saving jail configuration');
     });
 }
 
