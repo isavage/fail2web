@@ -327,19 +327,18 @@ def create_jail_config():
             alt_start_response = fail2ban_command(f'start {jail_name} --once')
             logger.info(f"Alternative start response: {alt_start_response}")
         
-        return jsonify({
+        return add_cors_headers(jsonify({
             'status': 'success',
             'message': f'Jail {jail_name} created and activated',
             'jail_active': jail_active,
             'stop_response': str(stop_response),
             'start_response': str(start_response),
-            'alt_start_response': str(alt_start_response) if not jail_active else "Not needed",
             'status_response': str(status_response)
-        })
+        }))
         
     except Exception as e:
         logger.error(f"Error creating jail config: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return add_cors_headers(jsonify({'error': str(e)}), 500)
 
 def write_config_file(filepath, data):
     """Write configuration file with proper format"""
