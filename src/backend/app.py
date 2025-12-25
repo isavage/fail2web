@@ -9,6 +9,8 @@ from datetime import timedelta, datetime
 import json
 import configparser
 from pathlib import Path
+import re
+import time
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 app.config['SECRET_KEY'] = os.getenv('FAIL2WEB_SECRET_KEY', 'your-secret-key-here')
@@ -64,7 +66,7 @@ def token_required(f):
 
 def fail2ban_command(cmd):
     try:
-        # Use the correct socket path that fail2ban is actually using
+        # Consistent socket path
         socket_path = '/var/run/fail2ban/fail2ban.sock'
         command = ['fail2ban-client', '--socket', socket_path] + cmd.split()
         logger.debug(f"Executing command: {' '.join(command)}")
@@ -96,9 +98,6 @@ def fail2ban_command(cmd):
                     return []
         return stdout
 
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Fail2ban command failed with exit code {e.returncode}: {e.stderr}")
-        return None
     except Exception as e:
         logger.error(f"Unexpected error in fail2ban_command: {str(e)}")
         return None
@@ -159,11 +158,9 @@ def get_jails():
             logger.error("fail2ban_command returned None - unable to communicate with fail2ban")
             return jsonify({'error': 'Failed to communicate with fail2ban. Check if fail2ban is running and socket is accessible.'}), 500
         logger.info(f"Successfully retrieved jails: {jails}")
-        # Ensure we always return a list, even if empty
         return jsonify({'jails': jails if isinstance(jails, list) else []})
     except Exception as e:
         logger.error(f"Error in get_jails: {str(e)}")
-        logger.error(f"Exception type: {type(e).__name__}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
@@ -185,7 +182,8 @@ def unban_ip():
     if not jail_name or not ip_address:
         return jsonify({'error': 'Missing jail name or IP address'}), 400
     
-    response = fail2ban_command(f'unban {ip_address} {jail_name}')
+    # Correct syntax: set <jail> unbanip <ip>
+    response = fail2ban_command(f'set {jail_name} unbanip {ip_address}')
     if response is None:
         return jsonify({'error': 'Failed to unban IP'}), 500
     return jsonify({'status': 'success', 'message': response})
@@ -207,7 +205,6 @@ def ban_ip():
     
     # Validate IP or CIDR format
     def is_valid_ip_or_cidr(ip):
-        import re
         ip_regex = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
         cidr_regex = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([0-2]?[0-9]|3[0-2])$'
         return re.match(ip_regex, ip) or re.match(cidr_regex, ip)
@@ -222,11 +219,11 @@ def ban_ip():
         logger.error(f"Failed to execute ban command for IP {ip_address} in jail {jail_name}")
         return jsonify({'error': f'Failed to ban IP {ip_address} in jail {jail_name}. Check server logs for details.'}), 500
     
-    # Handle Fail2ban response
-    response_lower = response.lower()
-    if 'already banned' in response_lower:
-        return jsonify({'status': 'warning', 'message': f'IP {ip_address} was already banned in {jail_name}'}), 200
-    elif response.strip().isdigit() and int(response.strip()) > 0:  # Check if response is a positive number
+    # Fail2ban returns a number (e.g., "1") on success, even if already banned
+    response_str = response.strip()
+    if response_str.isdigit() and int(response_str) > 0:
+        if 'already banned' in response_str.lower():
+            return jsonify({'status': 'warning', 'message': f'IP {ip_address} was already banned in {jail_name}'}), 200
         return jsonify({'status': 'success', 'message': f'IP {ip_address} banned successfully in {jail_name}'})
     else:
         logger.error(f"Unexpected Fail2ban response: '{response}'")
@@ -242,7 +239,7 @@ def get_jail_configs():
         
         if jail_path.exists():
             for jail_file in jail_path.glob('*.local'):
-                config = configparser.ConfigParser()
+                config = configparser.ConfigParser(interpolation=None)
                 config.read(jail_file)
                 
                 jail_info = {
@@ -257,7 +254,6 @@ def get_jail_configs():
                     'action': ''
                 }
                 
-                # Parse each section in the jail file
                 for section_name in config.sections():
                     section = dict(config[section_name])
                     if section_name == 'DEFAULT':
@@ -280,31 +276,18 @@ def create_jail_config():
     try:
         data = request.get_json()
         
-        # Validate required fields
         required_fields = ['name', 'filter', 'logpath']
         for field in required_fields:
             if not data.get(field):
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Log path validation removed - fail2ban will handle log file access
-        logpath = data['logpath']
-        logger.info(f"Setting log path: {logpath}")
-        # Note: We don't check if log file exists because:
-        # 1. fail2ban container has access to log files, not fail2web
-        # 2. fail2ban will validate log paths when it loads the config
-        # 3. Some log paths use fail2ban variables like %(syslog_authpriv)s
-        
         jail_name = data['name']
         jail_filename = f"{jail_name}.local"
         jail_filepath = Path(jail_d_path) / jail_filename
         
-        # Create config parser
         config = configparser.ConfigParser()
-        
-        # Set DEFAULT section values (matching existing configs)
         config['DEFAULT']['include'] = '/data/jail.d/ignoreip.conf'
         
-        # Add jail-specific section
         config.add_section(jail_name)
         config.set(jail_name, 'enabled', str(data.get('enabled', True)).lower())
         config.set(jail_name, 'filter', data['filter'])
@@ -316,63 +299,32 @@ def create_jail_config():
         if data.get('action'):
             config.set(jail_name, 'action', data['action'])
         
-        # Ensure directory exists
         jail_filepath.parent.mkdir(parents=True, exist_ok=True)
         
-        # Write configuration file
         with open(jail_filepath, 'w') as f:
             config.write(f)
         
-        # Wait a moment for file to be fully written
-        import time
         time.sleep(0.5)
         
-        # Reload fail2ban to apply changes
-        logger.info("Attempting to reload fail2ban configuration...")
-        
-        # Use correct fail2ban reload command
+        logger.info("Reloading fail2ban configuration...")
         reload_response = fail2ban_command('reload')
-        logger.info(f"Fail2ban reload response: {reload_response}")
         
-        # If reload fails or returns error, try with restart
-        if reload_response is None or 'error' in str(reload_response).lower():
-            logger.info("Trying reload with restart...")
-            reload_response = fail2ban_command('reload --restart')
-            logger.info(f"Fail2ban reload with restart response: {reload_response}")
-        
-        # Wait a moment for fail2ban to process the reload
         time.sleep(1)
         
-        # Only try to start the jail if reload was successful
         jail_started = False
-        if reload_response is not None and 'error' not in str(reload_response).lower():
+        if reload_response is not None:
             if data.get('enabled', True):
-                logger.info(f"Attempting to start jail {jail_name}...")
                 start_response = fail2ban_command(f'start {jail_name}')
-                logger.info(f"Start jail response: {start_response}")
-                
-                # Check if jail actually started by getting status
-                time.sleep(0.5)  # Give it a moment to start
+                time.sleep(0.5)
                 status_response = fail2ban_command('status')
-                logger.info(f"Current jail status after start: {status_response}")
-                
                 if status_response and jail_name in str(status_response):
                     jail_started = True
-                else:
-                    logger.warning(f"Jail {jail_name} might not have started")
-                    # Try to get more details about the failure
-                    jail_status = fail2ban_command(f'status {jail_name}')
-                    logger.warning(f"Jail {jail_name} status: {jail_status}")
-        else:
-            logger.warning(f"Reload failed or had errors, not attempting to start jail {jail_name}")
         
-        # Return success even if reload failed, as config file was written
-        # User can manually reload fail2ban later if needed
         return jsonify({
             'status': 'success',
             'message': f'Jail {jail_name} configuration saved successfully',
             'config_written': True,
-            'reload_successful': reload_response is not None and 'error' not in str(reload_response).lower(),
+            'reload_successful': reload_response is not None,
             'jail_started': jail_started,
             'reload_response': str(reload_response) if reload_response else None
         })
@@ -384,7 +336,6 @@ def create_jail_config():
 @app.route('/api/jails/config/<jail_name>', methods=['DELETE'])
 @token_required
 def delete_jail_config(jail_name):
-    """Delete a jail configuration"""
     try:
         jail_filename = f"{jail_name}.local"
         jail_filepath = Path(jail_d_path) / jail_filename
@@ -392,13 +343,8 @@ def delete_jail_config(jail_name):
         if not jail_filepath.exists():
             return jsonify({'error': f'Jail {jail_name} not found'}), 404
         
-        # Stop the jail first
         stop_response = fail2ban_command(f'stop {jail_name}')
-        
-        # Delete the configuration file
         jail_filepath.unlink()
-        
-        # Reload fail2ban
         reload_response = fail2ban_command('reload')
         
         return jsonify({
@@ -415,7 +361,6 @@ def delete_jail_config(jail_name):
 @app.route('/api/jails/<jail_name>/start', methods=['POST'])
 @token_required
 def start_jail(jail_name):
-    """Start a specific jail"""
     try:
         response = fail2ban_command(f'start {jail_name}')
         if response is None:
@@ -428,7 +373,6 @@ def start_jail(jail_name):
 @app.route('/api/jails/<jail_name>/stop', methods=['POST'])
 @token_required
 def stop_jail(jail_name):
-    """Stop a specific jail"""
     try:
         response = fail2ban_command(f'stop {jail_name}')
         if response is None:
@@ -441,7 +385,6 @@ def stop_jail(jail_name):
 @app.route('/api/jails/reload', methods=['POST'])
 @token_required
 def reload_fail2ban():
-    """Reload fail2ban configuration"""
     try:
         response = fail2ban_command('reload')
         if response is None:
@@ -454,7 +397,6 @@ def reload_fail2ban():
 @app.route('/api/jails/templates', methods=['GET'])
 @token_required
 def get_jail_templates():
-    """Get available jail templates"""
     try:
         templates_path = '/data/templates/jail-templates.conf'
         templates = {}
@@ -474,9 +416,7 @@ def get_jail_templates():
 @app.route('/api/filters/<filter_name>')
 @token_required
 def get_filter_content(filter_name):
-    """Get filter file content for display"""
     try:
-        # Try to find the filter file in common locations
         filter_paths = [
             f'/etc/fail2ban/filter.d/{filter_name}.conf',
             f'/data/fail2ban/filter.d/{filter_name}.conf',
@@ -504,7 +444,6 @@ def get_filter_content(filter_name):
 @app.route('/api/jails/create-from-template', methods=['POST'])
 @token_required
 def create_jail_from_template():
-    """Create a jail from a template"""
     try:
         data = request.get_json()
         template_name = data.get('template')
@@ -514,7 +453,6 @@ def create_jail_from_template():
         if not template_name or not jail_name:
             return jsonify({'error': 'Template name and jail name are required'}), 400
         
-        # Load templates
         templates_path = '/data/jail-templates.conf'
         if not Path(templates_path).exists():
             return jsonify({'error': 'No templates available'}), 404
@@ -525,32 +463,24 @@ def create_jail_from_template():
         if template_name not in config:
             return jsonify({'error': f'Template {template_name} not found'}), 404
         
-        # Create jail configuration
-        jail_config = config[template_name].copy()
-        jail_config.update(custom_params)  # Override with custom parameters
+        jail_config = dict(config[template_name])
+        jail_config.update(custom_params)
         
-        # Create the jail file
         jail_filename = f"{jail_name}.local"
         jail_filepath = Path(jail_d_path) / jail_filename
         
         jail_config_parser = configparser.ConfigParser()
-        # Set DEFAULT values directly
-        for key, value in jail_config.items():
-            jail_config_parser['DEFAULT'][key] = str(value)
+        jail_config_parser['DEFAULT']['include'] = '/data/jail.d/ignoreip.conf'
         
-        # Add jail-specific section
         jail_config_parser.add_section(jail_name)
         for key, value in jail_config.items():
             jail_config_parser.set(jail_name, key, str(value))
         
-        # Ensure directory exists
         jail_filepath.parent.mkdir(parents=True, exist_ok=True)
         
-        # Write configuration file
         with open(jail_filepath, 'w') as f:
             jail_config_parser.write(f)
         
-        # Reload fail2ban to apply changes
         reload_response = fail2ban_command('reload')
         
         return jsonify({
@@ -566,12 +496,10 @@ def create_jail_from_template():
 @app.route('/api/ignoreip', methods=['GET'])
 @token_required
 def get_ignoreip():
-    """Get current ignoreIP configuration"""
     try:
-        ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
+        ignoreip_file = Path(jail_d_path) / 'ignoreip.conf'
         
         if not ignoreip_file.exists():
-            # Create default ignoreIP file if it doesn't exist
             default_config = """[DEFAULT]
 ignoreip = 127.0.0.1/8
             192.168.0.0/16
@@ -599,7 +527,6 @@ ignoreip = 127.0.0.1/8
 @app.route('/api/ignoreip', methods=['POST'])
 @token_required
 def update_ignoreip():
-    """Update ignoreIP configuration"""
     try:
         data = request.get_json()
         ignoreip_list = data.get('ignoreip', [])
@@ -607,27 +534,28 @@ def update_ignoreip():
         if not isinstance(ignoreip_list, list):
             return jsonify({'error': 'ignoreip must be a list'}), 400
         
-        # Validate IP/CIDR format
+        ip_regex = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+        cidr_regex = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([0-2]?[0-9]|3[0-2])$'
+        
         for ip in ignoreip_list:
             if not ip.strip():
                 continue
-            if not is_valid_ip_or_cidr(ip.strip()):
+            if not (re.match(ip_regex, ip.strip()) or re.match(cidr_regex, ip.strip())):
                 return jsonify({'error': f'Invalid IP/CIDR format: {ip}'}), 400
         
-        # Create ignoreIP configuration
         config = configparser.ConfigParser()
-        # Set DEFAULT values directly
         ignoreip_text = '\n            '.join([ip.strip() for ip in ignoreip_list if ip.strip()])
-        config['DEFAULT']['ignoreip'] = ignoreip_text
+        if ignoreip_text:
+            config['DEFAULT']['ignoreip'] = ignoreip_text
+        else:
+            config['DEFAULT']['ignoreip'] = ''
         
-        # Write configuration file
-        ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
+        ignoreip_file = Path(jail_d_path) / 'ignoreip.conf'
         ignoreip_file.parent.mkdir(parents=True, exist_ok=True)
         
         with open(ignoreip_file, 'w') as f:
             config.write(f)
         
-        # Reload fail2ban to apply changes
         reload_response = fail2ban_command('reload')
         
         return jsonify({
@@ -640,25 +568,14 @@ def update_ignoreip():
         logger.error(f"Error updating ignoreIP configuration: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def is_valid_ip_or_cidr(ip):
-    """Validate IP address or CIDR notation"""
-    import re
-    # IPv4 address regex
-    ip_regex = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
-    
-    # CIDR notation regex
-    cidr_regex = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([0-2]?[0-9]|3[0-2])$'
-    
-    return re.match(ip_regex, ip.strip()) or re.match(cidr_regex, ip.strip())
-
 if __name__ == '__main__':
-    # Check if we can connect to fail2ban socket
+    # Consistent socket path in startup check
     try:
-        subprocess.run(['fail2ban-client', '--socket', '/data/fail2ban/fail2ban.sock', 'ping'], 
+        subprocess.run(['fail2ban-client', '--socket', '/var/run/fail2ban/fail2ban.sock', 'ping'], 
                       check=True, capture_output=True)
         logger.info('Successfully connected to fail2ban socket')
     except subprocess.CalledProcessError as e:
-        logger.error(f'Could not connect to fail2ban socket: {e.stderr}')
+        logger.error(f'Could not connect to fail2ban socket: {e.stderr.decode() if e.stderr else "Unknown error"}')
     except FileNotFoundError:
         logger.error('fail2ban-client not found. Make sure fail2ban-tools is installed.')
     
