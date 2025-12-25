@@ -38,7 +38,7 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get('Authorization')
-        logger.debug(f"Auth header received: {auth_header}")
+        logger.info(f"Auth header received: {auth_header}")
         
         if not auth_header:
             logger.warning("No Authorization header found")
@@ -58,7 +58,8 @@ def token_required(f):
             logger.error(f"Error extracting token: {str(e)}")
             return jsonify({'error': 'Invalid token format'}), 401
         
-        logger.debug(f"Extracted token: {token[:20]}..." if len(token) > 20 else f"Extracted token: {token}")
+        logger.info(f"Extracted token: {token[:50]}..." if len(token) > 50 else f"Extracted token: {token}")
+        logger.info(f"JWT Secret Key being used: {app.config['JWT_SECRET_KEY'][:10]}...")
         
         if not token:
             logger.warning("Empty token extracted")
@@ -66,18 +67,24 @@ def token_required(f):
         
         try:
             decoded = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+            logger.info(f"Token decoded successfully: {decoded}")
             if datetime.utcnow() > decoded['exp']:
-                logger.warning("Token has expired")
+                logger.warning(f"Token has expired. Exp: {decoded['exp']}, Now: {datetime.utcnow()}")
                 return jsonify({'error': 'Token has expired'}), 401
+        except jwt.ExpiredSignatureError as e:
+            logger.error(f"Token expired: {str(e)}")
+            return jsonify({'error': 'Token has expired'}), 401
         except jwt.InvalidTokenError as e:
             logger.error(f"Invalid token error: {str(e)}")
-            return jsonify({'error': 'Invalid token'}), 401
+            return jsonify({'error': f'Invalid token: {str(e)}'}), 401
         except Exception as e:
             logger.error(f"Token validation error: {str(e)}")
-            return jsonify({'error': 'Token validation failed'}), 401
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return jsonify({'error': f'Token validation failed: {str(e)}'}), 401
         
         g.current_user = decoded['sub']
-        logger.debug(f"Token validated successfully for user: {g.current_user}")
+        logger.info(f"Token validated successfully for user: {g.current_user}")
         return f(*args, **kwargs)
     return decorated
 

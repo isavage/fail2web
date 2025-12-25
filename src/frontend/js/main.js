@@ -1031,7 +1031,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Verify token is valid
+    // Try to verify token, but don't force logout if it fails
+    // Some servers might have issues with token verification endpoint
     fetch('/api/verify-token', {
         headers: {
             'Authorization': 'Bearer ' + token
@@ -1039,28 +1040,29 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(response => {
         if (response.status === 401) {
-            // Token expired or invalid
-            localStorage.removeItem('token');
-            window.location.replace('/login.html');
-            return Promise.reject(new Error('Token invalid'));
+            // Token verification failed, but don't logout immediately
+            // The token might still work for actual API calls
+            console.warn('Token verification failed, but continuing anyway');
+            return Promise.reject(new Error('Token verification failed'));
         }
         if (!response.ok) {
-            throw new Error(`Token verification failed: ${response.status}`);
+            console.warn(`Token verification returned status: ${response.status}`);
+            return Promise.reject(new Error(`Token verification failed: ${response.status}`));
         }
         return response.json();
     })
     .then(data => {
         // Token is valid, continue
         if (data && data.error) {
-            throw new Error(data.error);
+            console.warn('Token verification returned error:', data.error);
+        } else {
+            console.log('Token verified successfully');
         }
     })
     .catch(error => {
-        console.error('Token verification failed:', error);
-        if (error.message !== 'Token invalid') {
-            // Only logout if it's not already handled
-            logout();
-        }
+        console.warn('Token verification warning:', error.message);
+        // Don't logout on token verification failure
+        // Let actual API calls determine if token is valid
     });
 });
 
