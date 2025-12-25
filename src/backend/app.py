@@ -102,18 +102,44 @@ def fail2ban_command(cmd):
             jails = []
             for line in lines:
                 line = line.strip()
-                if not line or line.startswith('Number of jail:') or line.startswith('Status'):
+                # Skip empty lines and status lines
+                if not line:
                     continue
+                
+                # Skip common status lines (case insensitive)
+                line_lower = line.lower()
+                if (line_lower.startswith('number of jail') or 
+                    line_lower.startswith('status') or
+                    line_lower.startswith('jail list') or
+                    'total' in line_lower or
+                    ':' in line):  # Skip any key:value status lines
+                    continue
+                
+                # Parse jail names from lines like "1-sshd"
                 if '-' in line:
                     parts = line.split('-')
                     if len(parts) >= 2:
                         jail_name = parts[1].strip()
-                        if jail_name and jail_name not in ['-', 'Total', 'Number']:
+                        # Filter out non-jail names
+                        if (jail_name and 
+                            jail_name.lower() not in ['-', 'total', 'number', 'jail'] and
+                            not jail_name.startswith('Jail') and
+                            ':' not in jail_name):
                             jails.append(jail_name)
-                elif line and line not in ['-', 'Total', 'Number']:
-                    # Also add lines that look like jail names
-                    jails.append(line)
-            return jails if jails else []
+                # Also check for standalone jail names (without number prefix)
+                elif line and line.lower() not in ['-', 'total', 'number', 'jail']:
+                    # Make sure it's not a status line
+                    if (not line.startswith('Jail') and 
+                        ':' not in line and
+                        not any(word in line.lower() for word in ['list', 'status', 'number'])):
+                        jails.append(line)
+            
+            # Remove duplicates and return
+            unique_jails = []
+            for jail in jails:
+                if jail not in unique_jails:
+                    unique_jails.append(jail)
+            return unique_jails
         
         return stdout
     except FileNotFoundError:
