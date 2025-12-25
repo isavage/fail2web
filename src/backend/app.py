@@ -286,25 +286,13 @@ def create_jail_config():
             if not data.get(field):
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Validate log path exists (with more lenient check)
+        # Log path validation removed - fail2ban will handle log file access
         logpath = data['logpath']
-        logger.info(f"Checking log path: {logpath}")
-        logger.info(f"Current user: {os.getuid()}")
-        logger.info(f"File exists: {os.path.exists(logpath)}")
-        logger.info(f"File readable: {os.access(logpath, os.R_OK) if os.path.exists(logpath) else 'N/A'}")
-        
-        if not os.path.exists(logpath):
-            logger.warning(f"Log file not found: {logpath}")
-            # Check if there are any SSH log files in /var/log
-            var_log_files = []
-            if os.path.exists('/var/log'):
-                var_log_files = [f for f in os.listdir('/var/log') if 'auth' in f or 'ssh' in f or 'secure' in f]
-            logger.info(f"Available log files in /var/log: {var_log_files}")
-            # Don't fail the request, just warn and continue
-            # return jsonify({
-            #     'error': f'Log file not found: {logpath}',
-            #     'suggestion': 'Make sure the log path is accessible inside the container. Check docker-compose.yml volume mounts.'
-            # }), 400
+        logger.info(f"Setting log path: {logpath}")
+        # Note: We don't check if log file exists because:
+        # 1. fail2ban container has access to log files, not fail2web
+        # 2. fail2ban will validate log paths when it loads the config
+        # 3. Some log paths use fail2ban variables like %(syslog_authpriv)s
         
         jail_name = data['name']
         jail_filename = f"{jail_name}.local"
