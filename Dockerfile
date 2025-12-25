@@ -3,7 +3,7 @@ FROM alpine:3.17
 WORKDIR /app
 
 # Install Python, pip, and fail2ban-client
-RUN apk add --no-cache python3 py3-pip fail2ban-tools && \
+RUN apk add --no-cache python3 py3-pip fail2ban && \
     ln -sf python3 /usr/bin/python
 
 # Install Flask dependencies
