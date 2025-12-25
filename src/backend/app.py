@@ -331,6 +331,16 @@ def create_jail_config():
         if data.get('enabled', True):
             start_response = fail2ban_command(f'start {jail_name}')
             logger.info(f"Started jail {jail_name}: {start_response}")
+            
+            # Check if jail actually started by getting status
+            status_response = fail2ban_command('status')
+            logger.info(f"Current jail status after start: {status_response}")
+            
+            if jail_name not in status_response:
+                logger.error(f"Jail {jail_name} failed to start despite no errors")
+                # Try to get more details about the failure
+                jail_status = fail2ban_command(f'status {jail_name}')
+                logger.error(f"Jail {jail_name} status: {jail_status}")
         
         return jsonify({
             'status': 'success',
