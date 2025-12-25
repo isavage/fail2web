@@ -156,7 +156,7 @@ function setFilterDefaults(filterValue) {
 
     // Hint for sshd users
     if (filterValue === 'sshd' || filterValue === 'sshd2') {
-        console.log('%cNote: This jail will automatically use backend=systemd for better reliability in containers', 'color: green; font-weight: bold;');
+        // SSH jails automatically use backend=systemd for better reliability in containers
     }
 }
 
@@ -178,35 +178,30 @@ function loadFilterContent(filterName) {
         if (!response.ok) {
             // Handle non-200 responses
             if (response.status === 404) {
-                console.warn(`Filter ${filterName} not found on server`);
                 return { status: 'not_found', message: `Filter configuration for ${filterName} is not available. Using default settings.` };
             }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         return response.json();
     })
-    .then(data => {
-        if (data.status === 'success') {
-            const filterContent = document.getElementById('filter-content');
-            const filterRegex = document.getElementById('filter-regex');
-            
-            filterRegex.value = data.content;
-            filterContent.style.display = 'block';
-        } else if (data.status === 'not_found') {
-            // Filter not found, show warning but don't display content
-            console.warn(data.message || `Filter ${filterName} not found`);
-            // Optionally show a message to the user
+        .then(data => {
+            if (data.status === 'success') {
+                const filterContent = document.getElementById('filter-content');
+                const filterRegex = document.getElementById('filter-regex');
+                
+                filterRegex.value = data.content;
+                filterContent.style.display = 'block';
+            } else if (data.status === 'not_found') {
+                // Filter not found, hide content section
+                const filterContent = document.getElementById('filter-content');
+                filterContent.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            // Hide filter content section on error
             const filterContent = document.getElementById('filter-content');
             filterContent.style.display = 'none';
-        }
-    })
-    .catch(error => {
-        console.error('Error loading filter content:', error);
-        // Don't show error to user for filter loading failures
-        // Just hide the filter content section
-        const filterContent = document.getElementById('filter-content');
-        filterContent.style.display = 'none';
-    });
+        });
 }
 
 function populateFilterOptions() {
@@ -381,8 +376,6 @@ function removeIgnoreIP(ip) {
 }
 
 function saveIgnoreIPToBackend() {
-    console.log('Auto-saving ignoreIP list:', ignoreIPList);
-    
     authenticatedFetch('/api/ignoreip', {
         method: 'POST',
         body: JSON.stringify({
@@ -390,21 +383,12 @@ function saveIgnoreIPToBackend() {
         })
     })
     .then(data => {
-        if (data.status === 'success') {
-            // Success - no need to alert, it's auto-save
-            console.log('Ignore IP list auto-saved successfully');
-        } else {
+        if (data.status !== 'success') {
             console.error('Error auto-saving ignoreIP:', data.error);
-            // Show error but don't use alert for auto-save
-            // User can use Refresh button if needed
         }
     })
     .catch(error => {
         console.error('Error auto-saving ignoreIP:', error);
-        // Log the full error for debugging
-        console.error('Full error details:', error);
-        // Don't show alert for auto-save errors
-        // User can use Refresh button if needed
     });
 }
 
@@ -1164,25 +1148,17 @@ document.addEventListener('DOMContentLoaded', function() {
         if (response.status === 401) {
             // Token verification failed, but don't logout immediately
             // The token might still work for actual API calls
-            console.warn('Token verification failed, but continuing anyway');
             return Promise.reject(new Error('Token verification failed'));
         }
         if (!response.ok) {
-            console.warn(`Token verification returned status: ${response.status}`);
             return Promise.reject(new Error(`Token verification failed: ${response.status}`));
         }
         return response.json();
     })
     .then(data => {
         // Token is valid, continue
-        if (data && data.error) {
-            console.warn('Token verification returned error:', data.error);
-        } else {
-            console.log('Token verified successfully');
-        }
     })
     .catch(error => {
-        console.warn('Token verification warning:', error.message);
         // Don't logout on token verification failure
         // Let actual API calls determine if token is valid
     });

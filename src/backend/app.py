@@ -27,7 +27,7 @@ def add_cors_headers(response):
 
 # Logging
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)  # Reduced from INFO to WARNING
 
 # Get environment variables
 USERNAME = os.getenv('FAIL2WEB_USERNAME', 'admin')
@@ -77,7 +77,6 @@ def fail2ban_command(cmd):
         # Use the correct socket path that fail2ban is actually using
         socket_path = '/var/run/fail2ban/fail2ban.sock'
         command = ['fail2ban-client', '--socket', socket_path] + cmd.split()
-        logger.debug(f"Executing command: {' '.join(command)}")
         
         result = subprocess.run(
             command,
@@ -88,9 +87,6 @@ def fail2ban_command(cmd):
         
         stdout = result.stdout.strip()
         stderr = result.stderr.strip()
-        logger.debug(f"Command output: '{stdout}'")
-        logger.debug(f"Command stderr: '{stderr}'")
-        logger.debug(f"Command return code: {result.returncode}")
         
         if result.returncode != 0:
             logger.error(f"Command failed with return code {result.returncode}: {stderr}")
@@ -100,9 +96,6 @@ def fail2ban_command(cmd):
         if cmd == 'status':
             lines = stdout.split('\n')
             jails = []
-            
-            # Debug: log the raw output for troubleshooting
-            logger.debug(f"Raw fail2ban status output lines: {lines}")
             
             # First, try to extract from any line containing "Jail list:"
             for line in lines:
@@ -118,7 +111,6 @@ def fail2ban_command(cmd):
                     match = re.search(r'jail list:\s*(.+)', line, re.IGNORECASE)
                     if match:
                         jail_list_part = match.group(1).strip()
-                        logger.debug(f"Found jail list part: '{jail_list_part}'")
                         
                         # Split by spaces, commas, tabs, or other whitespace
                         jail_names = re.split(r'[,\s\t]+', jail_list_part)
@@ -173,12 +165,11 @@ def fail2ban_command(cmd):
                 if jail and jail not in unique_jails:
                     unique_jails.append(jail)
             
-            logger.debug(f"Parsed jails: {unique_jails}")
             return unique_jails if unique_jails else []
         
         return stdout
     except FileNotFoundError:
-        logger.error(f"fail2ban-client command not found. Is fail2ban installed and in PATH? Command: {' '.join(command)}")
+        logger.error(f"fail2ban-client command not found. Is fail2ban installed and in PATH?")
         return None
     except Exception as e:
         logger.error(f"Error executing fail2ban command: {e}")
@@ -195,8 +186,6 @@ def login():
         username = data.get('username')
         password = data.get('password')
         
-        logger.debug(f"Login attempt for user: {username}")
-        
         if username == USERNAME and password == PASSWORD:
             # Generate JWT token with explicit algorithm
             payload = {
@@ -209,10 +198,6 @@ def login():
             # Ensure token is string (not bytes)
             if isinstance(token, bytes):
                 token = token.decode('utf-8')
-            
-            logger.debug(f"Generated token: {token[:20]}..." if len(token) > 20 else f"Generated token: {token}")
-            logger.debug(f"JWT Secret Key: {app.config['JWT_SECRET_KEY'][:10]}...")
-            logger.debug(f"Token payload: {payload}")
             
             return jsonify({
                 'token': token,
@@ -230,17 +215,13 @@ def login():
 @token_required
 def get_jails():
     try:
-        logger.info("Attempting to get jail status from fail2ban")
         jails = fail2ban_command('status')
         if jails is None:
-            logger.error("fail2ban_command returned None - unable to communicate with fail2ban")
+            logger.error("Unable to communicate with fail2ban")
             return jsonify({'error': 'Failed to communicate with fail2ban. Check if fail2ban is running and socket is accessible.'}), 500
-        logger.info(f"Successfully retrieved jails: {jails}")
         return jsonify({'jails': jails if isinstance(jails, list) else []})
     except Exception as e:
         logger.error(f"Error in get_jails: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/jails/config')
@@ -306,20 +287,14 @@ def create_jail_config():
         write_config_file(jail_filepath, data)
         
         # Clean reload: stop fail2ban, reload, restart
-        logger.info(f"Performing clean reload for jail {jail_name}")
-        
         # Stop fail2ban completely
         stop_response = fail2ban_command('stop')
-        if stop_response is None:
-            logger.error("Failed to stop fail2ban")
         
         # Wait for stop to complete
         time.sleep(2)
         
         # Start fail2ban (will auto-read new configs)
         start_response = fail2ban_command('start')
-        if start_response is None:
-            logger.error("Failed to start fail2ban")
         
         # Wait for startup and verify
         time.sleep(3)
@@ -327,14 +302,8 @@ def create_jail_config():
         jail_active = jail_name in str(status_response) if status_response else False
         
         if not jail_active:
-            logger.error(f"Jail {jail_name} failed to start. Checking jail status...")
-            jail_status = fail2ban_command(f'status {jail_name}')
-            logger.error(f"Individual jail status: {jail_status}")
-            
             # Try alternative start method
-            logger.info("Trying alternative start method...")
-            alt_start_response = fail2ban_command(f'start {jail_name} --once')
-            logger.info(f"Alternative start response: {alt_start_response}")
+            fail2ban_command(f'start {jail_name} --once')
         
         return add_cors_headers(jsonify({
             'status': 'success',
@@ -528,8 +497,6 @@ def get_ignoreip():
         
         # If file doesn't exist, create it with default IPs
         if not ignoreip_file.exists():
-            logger.info(f"ignoreIP.conf doesn't exist, creating with defaults")
-            
             # Default IPs that should never be banned
             default_ips = [
                 '127.0.0.1/8',    # localhost
@@ -548,7 +515,6 @@ def get_ignoreip():
             with open(ignoreip_file, 'w') as f:
                 config.write(f)
             
-            logger.info(f"Created ignoreIP.conf with {len(default_ips)} default IPs")
             return jsonify({'ignoreip': default_ips})
         
         # File exists, read it
@@ -571,7 +537,6 @@ def get_ignoreip():
 def update_ignoreip():
     try:
         data = request.get_json()
-        logger.debug(f"Received ignoreip data: {data}")
         
         if not data or 'ignoreip' not in data:
             return jsonify({'error': 'Missing ignoreip field in request'}), 400
@@ -580,8 +545,6 @@ def update_ignoreip():
         
         if not isinstance(ignoreip_list, list):
             return jsonify({'error': 'ignoreip must be a list'}), 400
-        
-        logger.debug(f"Processing ignoreip list: {ignoreip_list}")
         
         # More permissive IP and CIDR validation
         # Accepts IPv4 (192.168.1.1), IPv6 (::1), and CIDR notation
@@ -598,8 +561,6 @@ def update_ignoreip():
             ip = ip.strip()
             if not ip:
                 continue
-                
-            logger.debug(f"Validating IP: '{ip}'")
             
             # Check if it matches IP or CIDR pattern
             if (re.match(ipv4_regex, ip) or re.match(ipv6_regex, ip) or 
@@ -670,8 +631,6 @@ def update_ignoreip():
                 logger.warning(f"Invalid IP/CIDR format: {ip}")
                 return jsonify({'error': f'Invalid IP/CIDR format: {ip}'}), 400
         
-        logger.debug(f"Validated IPs: {validated_ips}")
-        
         # Add default IPs that should never be banned
         default_ips = [
             '127.0.0.1/8',    # localhost
@@ -683,7 +642,6 @@ def update_ignoreip():
         
         # Merge user IPs with defaults, removing duplicates
         all_ips = list(dict.fromkeys(default_ips + validated_ips))
-        logger.debug(f"All IPs (defaults + user): {all_ips}")
         
         config = configparser.ConfigParser()
         # DEFAULT section exists automatically in ConfigParser
@@ -697,8 +655,6 @@ def update_ignoreip():
         with open(ignoreip_file, 'w') as f:
             config.write(f)
         
-        logger.info(f"Saved {len(validated_ips)} IPs to ignoreIP.conf")
-        
         reload_response = fail2ban_command('reload')
         
         return jsonify({
@@ -709,8 +665,6 @@ def update_ignoreip():
         
     except Exception as e:
         logger.error(f"Error updating ignoreIP configuration: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/banned/<jail_name>')
@@ -795,12 +749,11 @@ def get_filter_content(filter_name):
         for path in possible_paths:
             if path.exists():
                 filter_path = path
-                logger.info(f"Found filter {filter_name} at {path}")
                 break
         
         if not filter_path:
             # Filter not found in any location
-            logger.warning(f"Filter {filter_name} not found in any location. Checked paths: {possible_paths}")
+            logger.warning(f"Filter {filter_name} not found in any location")
             return jsonify({
                 'status': 'not_found',
                 'message': f'Filter {filter_name} configuration not available. Check if filter file exists in /data/fail2ban/filter.d/.',
@@ -834,16 +787,4 @@ def verify_token():
 
 
 if __name__ == '__main__':
-    # Check if we can connect to fail2ban socket
-    try:
-        subprocess.run(['fail2ban-client', '--socket', '/var/run/fail2ban/fail2ban.sock', 'ping'], 
-                       check=True, capture_output=True)
-        logger.info('Successfully connected to fail2ban socket')
-    except subprocess.CalledProcessError as e:
-        logger.error(f'Could not connect to fail2ban socket: {e.stderr.decode() if e.stderr else "Unknown error"}')
-    except FileNotFoundError:
-        logger.error('fail2ban-client not found. Make sure fail2ban-tools is installed.')
-    except Exception as e:
-        logger.error(f'Unexpected error checking fail2ban socket: {str(e)}')
-    
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
