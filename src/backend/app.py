@@ -301,9 +301,8 @@ def create_jail_config():
         # Create config parser
         config = configparser.ConfigParser()
         
-        # Add DEFAULT section with ignoreIP include (matching existing configs)
-        config.add_section('DEFAULT')
-        config.set('DEFAULT', 'include', '/data/jail.d/ignoreip.conf')
+        # Set DEFAULT section values (matching existing configs)
+        config['DEFAULT']['include'] = '/data/jail.d/ignoreip.conf'
         
         # Add jail-specific section
         config.add_section(jail_name)
@@ -524,11 +523,13 @@ def create_jail_from_template():
         jail_filepath = Path(jail_d_path) / jail_filename
         
         jail_config_parser = configparser.ConfigParser()
-        jail_config_parser.add_section('DEFAULT')
-        jail_config_parser.add_section(jail_name)
-        
+        # Set DEFAULT values directly
         for key, value in jail_config.items():
-            jail_config_parser.set('DEFAULT', key, str(value))
+            jail_config_parser['DEFAULT'][key] = str(value)
+        
+        # Add jail-specific section
+        jail_config_parser.add_section(jail_name)
+        for key, value in jail_config.items():
             jail_config_parser.set(jail_name, key, str(value))
         
         # Ensure directory exists
@@ -604,11 +605,9 @@ def update_ignoreip():
         
         # Create ignoreIP configuration
         config = configparser.ConfigParser()
-        config.add_section('DEFAULT')
-        
-        # Format ignoreIP list for config file
+        # Set DEFAULT values directly
         ignoreip_text = '\n            '.join([ip.strip() for ip in ignoreip_list if ip.strip()])
-        config.set('DEFAULT', 'ignoreip', ignoreip_text)
+        config['DEFAULT']['ignoreip'] = ignoreip_text
         
         # Write configuration file
         ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
