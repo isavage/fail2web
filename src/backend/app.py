@@ -313,7 +313,11 @@ def create_jail_config():
         # Create config parser
         config = configparser.ConfigParser()
         
-        # Add jail-specific section only (no DEFAULT section)
+        # Add DEFAULT section with ignoreIP include (matching existing configs)
+        config.add_section('DEFAULT')
+        config.set('DEFAULT', 'include', '/data/jail.d/ignoreip.conf')
+        
+        # Add jail-specific section
         config.add_section(jail_name)
         config.set(jail_name, 'enabled', str(data.get('enabled', True)).lower())
         config.set(jail_name, 'filter', data['filter'])
@@ -336,18 +340,18 @@ def create_jail_config():
         import time
         time.sleep(0.5)
         
-        # Reload fail2ban to apply changes - use correct reload method
+        # Reload fail2ban to apply changes
         logger.info("Attempting to reload fail2ban configuration...")
         
-        # Method 1: Reload the specific jail (correct approach)
-        reload_response = fail2ban_command(f'reload {jail_name}')
-        logger.info(f"Jail-specific reload response: {reload_response}")
+        # Use correct fail2ban reload command
+        reload_response = fail2ban_command('reload')
+        logger.info(f"Fail2ban reload response: {reload_response}")
         
-        # Method 2: If that doesn't work, try full reload with restart
-        if 'sshd2' not in str(reload_response):
-            logger.info("Trying full reload with restart...")
-            full_reload_response = fail2ban_command('reload --restart')
-            logger.info(f"Full reload with restart response: {full_reload_response}")
+        # If reload fails or returns error, try with restart
+        if reload_response is None or 'error' in str(reload_response).lower():
+            logger.info("Trying reload with restart...")
+            reload_response = fail2ban_command('reload --restart')
+            logger.info(f"Fail2ban reload with restart response: {reload_response}")
         
         # Wait a moment for fail2ban to process the reload
         time.sleep(1)
@@ -359,14 +363,15 @@ def create_jail_config():
             logger.info(f"Start jail response: {start_response}")
             
             # Check if jail actually started by getting status
+            time.sleep(0.5)  # Give it a moment to start
             status_response = fail2ban_command('status')
             logger.info(f"Current jail status after start: {status_response}")
             
-            if jail_name not in status_response:
-                logger.error(f"Jail {jail_name} failed to start despite no errors")
+            if status_response and jail_name not in str(status_response):
+                logger.warning(f"Jail {jail_name} might not have started")
                 # Try to get more details about the failure
                 jail_status = fail2ban_command(f'status {jail_name}')
-                logger.error(f"Jail {jail_name} status: {jail_status}")
+                logger.warning(f"Jail {jail_name} status: {jail_status}")
         
         return jsonify({
             'status': 'success',
