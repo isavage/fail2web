@@ -54,7 +54,6 @@ function showJailConfig() {
             customFilterInput.required = false;
         }
     });
-    loadLogMonitoring();
 }
 
 function hideJailConfig() {

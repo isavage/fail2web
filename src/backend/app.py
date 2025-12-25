@@ -45,7 +45,7 @@ def token_required(f):
 
         try:
             # Store the decoded token in g object for access in routes
-            g.decoded_token = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            g.decoded_token = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             return f(*args, **kwargs)
         except jwt.ExpiredSignatureError:
             # Clear both cookie and localStorage
