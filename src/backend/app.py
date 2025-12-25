@@ -650,10 +650,23 @@ def update_ignoreip():
         
         logger.debug(f"Validated IPs: {validated_ips}")
         
+        # Add default IPs that should never be banned
+        default_ips = [
+            '127.0.0.1/8',    # localhost
+            '::1',            # IPv6 localhost
+            '192.168.0.0/16', # private network
+            '10.0.0.0/8',     # private network
+            '172.16.0.0/12'   # private network
+        ]
+        
+        # Merge user IPs with defaults, removing duplicates
+        all_ips = list(dict.fromkeys(default_ips + validated_ips))
+        logger.debug(f"All IPs (defaults + user): {all_ips}")
+        
         config = configparser.ConfigParser()
         # DEFAULT section exists automatically in ConfigParser
         # Don't call add_section('DEFAULT') - it's reserved
-        ignoreip_text = '\n            '.join(validated_ips)
+        ignoreip_text = '\n            '.join(all_ips)
         config['DEFAULT']['ignoreip'] = ignoreip_text
         
         ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
