@@ -296,34 +296,26 @@ function renderIgnoreIPList() {
         return;
     }
     
-    // Group IPs in rows of 4-5 per line
-    const ipsPerRow = 4;
-    const rows = [];
+    // Allow more IPs per row - let CSS flexbox handle the layout
+    // Just create one row with all IPs and let flexbox wrap them
+    const rowItem = document.createElement('div');
+    rowItem.className = 'ignoreip-row';
     
-    for (let i = 0; i < ignoreIPList.length; i += ipsPerRow) {
-        rows.push(ignoreIPList.slice(i, i + ipsPerRow));
-    }
+    const ipContainer = document.createElement('div');
+    ipContainer.className = 'ip-container';
     
-    rows.forEach(row => {
-        const rowItem = document.createElement('div');
-        rowItem.className = 'ignoreip-row';
-        
-        const ipContainer = document.createElement('div');
-        ipContainer.className = 'ip-container';
-        
-        row.forEach((ip, index) => {
-            const ipItem = document.createElement('div');
-            ipItem.className = 'ignoreip-item-inline';
-            ipItem.innerHTML = `
-                <span class="ip-text">${ip}</span>
-                <button class="remove-ip-button-small" onclick="removeIgnoreIP('${ip}')">×</button>
-            `;
-            ipContainer.appendChild(ipItem);
-        });
-        
-        rowItem.appendChild(ipContainer);
-        container.appendChild(rowItem);
+    ignoreIPList.forEach((ip, index) => {
+        const ipItem = document.createElement('div');
+        ipItem.className = 'ignoreip-item-inline';
+        ipItem.innerHTML = `
+            <span class="ip-text">${ip}</span>
+            <button class="remove-ip-button-small" onclick="removeIgnoreIP('${ip}')">×</button>
+        `;
+        ipContainer.appendChild(ipItem);
     });
+    
+    rowItem.appendChild(ipContainer);
+    container.appendChild(rowItem);
 }
 
 function addIgnoreIP() {

@@ -184,7 +184,9 @@ header {
     border-radius: 6px;
     border-left: 4px solid var(--success-color);
     font-size: 0.875rem;
-    min-width: 140px;
+    min-width: 160px;
+    max-width: 200px;
+    flex: 1 1 auto;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -197,6 +199,9 @@ header {
     font-family: monospace;
     color: #495057;
     flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .remove-ip-button {
