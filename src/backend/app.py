@@ -99,16 +99,21 @@ def fail2ban_command(cmd):
         # Parse jail list from status command
         if cmd == 'status':
             lines = stdout.split('\n')
+            jails = []
             for line in lines:
-                if line.startswith('Number of jail:') or line.startswith('Status'):
+                line = line.strip()
+                if not line or line.startswith('Number of jail:') or line.startswith('Status'):
                     continue
                 if '-' in line:
                     parts = line.split('-')
                     if len(parts) >= 2:
                         jail_name = parts[1].strip()
                         if jail_name and jail_name not in ['-', 'Total', 'Number']:
-                            return jail_name
-            return [jail for jail in lines if jail and jail not in ['-', 'Total', 'Number']]
+                            jails.append(jail_name)
+                elif line and line not in ['-', 'Total', 'Number']:
+                    # Also add lines that look like jail names
+                    jails.append(line)
+            return jails if jails else []
         
         return stdout
     except FileNotFoundError:

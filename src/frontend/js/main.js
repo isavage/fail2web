@@ -24,7 +24,7 @@ function setupEventListeners() {
 
 // Function to render components
 function renderComponents() {
-    renderJailList();
+    // renderJailList() is handled by fetchJails() which runs on page load
     renderBannedIPs();
     loadJailConfigs();
 }
