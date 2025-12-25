@@ -495,62 +495,70 @@ function handleJailFormSubmit(event) {
         return;
     }
 
+    // Show loading indicator instantly - smaller centered block
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'jail-loading-overlay';
+    loadingDiv.style.cssText = `
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 300px !important;
+        min-height: 150px !important;
+        background: rgba(0, 0, 0, 0.85) !important;
+        color: white !important;
+        padding: 25px !important;
+        border-radius: 12px !important;
+        font-family: Arial, sans-serif !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+        z-index: 10000 !important;
+        text-align: center !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+        backdrop-filter: blur(10px) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    `;
+    loadingDiv.innerHTML = `
+        <div style="margin-bottom: 15px; font-size: 24px;">⚙️</div>
+        <div style="font-size: 18px; margin-bottom: 8px;">Creating Jail Configuration</div>
+        <div style="font-size: 14px; opacity: 0.8;">Writing and activating ${formData.name}...</div>
+        <div style="margin-top: 10px; font-size: 12px; opacity: 0.6;">Please wait</div>
+    `;
+    document.body.appendChild(loadingDiv);
+
     authenticatedFetch('/api/jails/config', {
         method: 'POST',
         body: JSON.stringify(formData)
     })
     .then(data => {
+        // Remove loading indicator
+        if (document.body.contains(loadingDiv)) {
+            document.body.removeChild(loadingDiv);
+        }
+        
         if (data.status === 'success') {
-            // Enhanced loading indicator with better visibility
-            const loadingDiv = document.createElement('div');
-            loadingDiv.id = 'jail-loading-overlay';
-            loadingDiv.style.cssText = `
-                position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 100vw !important;
-                height: 100vh !important;
-                background: rgba(0, 0, 0, 0.9) !important;
-                color: white !important;
-                padding: 40px !important;
-                border-radius: 8px !important;
-                font-family: Arial, sans-serif !important;
-                font-size: 18px !important;
-                font-weight: bold !important;
-                z-index: 10000 !important;
-                text-align: center !important;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-                backdrop-filter: blur(5px) !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-            `;
-            loadingDiv.innerHTML = `
-                <div style="margin-bottom: 20px;">
-                    <div style="font-size: 24px; margin-bottom: 10px;">⚙️ Creating Jail Configuration</div>
-                    <div style="font-size: 16px;">Writing and activating ${formData.name}...</div>
-                    <div style="margin-top: 10px; font-size: 14px; opacity: 0.7;">This may take a few seconds</div>
-                </div>
-            `;
-            document.body.appendChild(loadingDiv);
-            
-            // Show success immediately with loading indicator still visible
-            setTimeout(() => {
-                document.body.removeChild(loadingDiv);
-                alert('Jail configuration saved successfully!\n\n' +
-                      (data.jail_active 
-                             ? '✅ Jail started and is now active!' 
-                             : '⚠️ Config saved. Jail will activate on next reload.'));
-                clearJailForm();
-                loadJailConfigs();
-                renderJailList(); // Refresh active jails
-                fetchJails();     // Refresh main jails view
-            }, 1500); // Remove loading after 1.5 seconds
+            alert('Jail configuration saved successfully!\n\n' +
+                  (data.jail_active 
+                         ? '✅ Jail started and is now active!' 
+                         : '⚠️ Config saved. Jail will activate on next reload.'));
+            clearJailForm();
+            loadJailConfigs();
+            renderJailList(); // Refresh active jails
+            fetchJails();     // Refresh main jails view
         } else {
             alert('Error saving jail: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
+        // Remove loading indicator on error too
+        if (document.body.contains(loadingDiv)) {
+            document.body.removeChild(loadingDiv);
+        }
+        
         console.error('Error saving jail config:', error);
         if (error.message !== 'Authentication failed' && error.message !== 'No token') {
             alert('Network error while saving jail configuration: ' + error.message);
@@ -707,23 +715,39 @@ function toggleJail(jailName, currentlyEnabled) {
 function deleteJailConfig(jailName) {
     if (!confirm(`Are you sure you want to delete jail ${jailName}? This will stop the jail and remove its configuration.`)) return;
     
-    // Show instant loading indicator
+    // Show instant loading indicator - smaller centered block
     const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'jail-delete-loading-overlay';
     loadingDiv.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.8);
-        color: white;
-        padding: 20px;
-        border-radius: 8px;
-        font-family: Arial, sans-serif;
-        font-size: 16px;
-        z-index: 1000;
-        text-align: center;
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: 300px !important;
+        min-height: 120px !important;
+        background: rgba(0, 0, 0, 0.85) !important;
+        color: white !important;
+        padding: 20px !important;
+        border-radius: 12px !important;
+        font-family: Arial, sans-serif !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+        z-index: 10000 !important;
+        text-align: center !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+        backdrop-filter: blur(10px) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
     `;
-    loadingDiv.innerHTML = '<div>Deleting jail and stopping service...</div>';
+    loadingDiv.innerHTML = `
+        <div style="margin-bottom: 10px; font-size: 24px;">🗑️</div>
+        <div style="font-size: 16px; margin-bottom: 5px;">Deleting Jail</div>
+        <div style="font-size: 14px; opacity: 0.8;">Stopping and removing ${jailName}...</div>
+        <div style="margin-top: 8px; font-size: 12px; opacity: 0.6;">Please wait</div>
+    `;
     document.body.appendChild(loadingDiv);
     
     const headers = {
@@ -736,7 +760,11 @@ function deleteJailConfig(jailName) {
     })
     .then(response => response.json())
     .then(data => {
-        document.body.removeChild(loadingDiv);
+        // Remove loading indicator
+        if (document.body.contains(loadingDiv)) {
+            document.body.removeChild(loadingDiv);
+        }
+        
         if (data.status === 'success') {
             alert(`✅ Jail ${jailName} deleted successfully!`);
             loadJailConfigs();
@@ -747,7 +775,11 @@ function deleteJailConfig(jailName) {
         }
     })
     .catch(error => {
-        document.body.removeChild(loadingDiv);
+        // Remove loading indicator on error too
+        if (document.body.contains(loadingDiv)) {
+            document.body.removeChild(loadingDiv);
+        }
+        
         alert('Network error while deleting jail');
     });
 }
