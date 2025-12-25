@@ -936,11 +936,11 @@ function viewBannedIPs(jailName) {
                 container.appendChild(listElement);
             } else {
                 container.innerHTML = `
-                    <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6;">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">🛡️</div>
-                        <h3 style="color: #4a5568; margin-bottom: 0.5rem;">No Banned IPs</h3>
-                        <p style="color: #718096; margin-bottom: 0.5rem;">The jail <strong>${jailName}</strong> has no banned IP addresses.</p>
-                        <p style="color: #a0aec0; font-size: 0.875rem;">All connections are currently allowed for this service.</p>
+                    <div style="text-align: center; padding: 1rem; margin-top: 1rem; background: #f8f9fa; border-radius: 6px; border: 1px dashed #dee2e6;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.7;">🛡️</div>
+                        <h4 style="color: #4a5568; margin-bottom: 0.25rem; font-size: 0.9rem;">No Banned IPs</h4>
+                        <p style="color: #718096; margin-bottom: 0.25rem; font-size: 0.8rem;">The jail <strong>${jailName}</strong> has no banned IP addresses.</p>
+                        <p style="color: #a0aec0; font-size: 0.7rem;">All connections are currently allowed for this service.</p>
                     </div>
                 `;
             }
@@ -1291,11 +1291,11 @@ window.fetchJailDetails = function(jail) {
                 renderIPTable(document.getElementById('ip-table'), bannedIPs, jail);
             } else {
                 bannedIPsContainer.innerHTML = `
-                    <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6;">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">🛡️</div>
-                        <h3 style="color: #4a5568; margin-bottom: 0.5rem;">No Banned IPs</h3>
-                        <p style="color: #718096; margin-bottom: 0.5rem;">The jail <strong>${jail}</strong> has no banned IP addresses.</p>
-                        <p style="color: #a0aec0; font-size: 0.875rem;">All connections are currently allowed for this service.</p>
+                    <div style="text-align: center; padding: 1rem; margin-top: 1rem; background: #f8f9fa; border-radius: 6px; border: 1px dashed #dee2e6;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.7;">🛡️</div>
+                        <h4 style="color: #4a5568; margin-bottom: 0.25rem; font-size: 0.9rem;">No Banned IPs</h4>
+                        <p style="color: #718096; margin-bottom: 0.25rem; font-size: 0.8rem;">The jail <strong>${jail}</strong> has no banned IP addresses.</p>
+                        <p style="color: #a0aec0; font-size: 0.7rem;">All connections are currently allowed for this service.</p>
                     </div>
                 `;
             }
