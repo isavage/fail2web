@@ -935,7 +935,14 @@ function viewBannedIPs(jailName) {
                 listElement.appendChild(table);
                 container.appendChild(listElement);
             } else {
-                container.innerHTML = `<p>No banned IPs in ${jailName}.</p>`;
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🛡️</div>
+                        <h3 style="color: #4a5568; margin-bottom: 0.5rem;">No Banned IPs</h3>
+                        <p style="color: #718096; margin-bottom: 0.5rem;">The jail <strong>${jailName}</strong> has no banned IP addresses.</p>
+                        <p style="color: #a0aec0; font-size: 0.875rem;">All connections are currently allowed for this service.</p>
+                    </div>
+                `;
             }
         } else {
             container.innerHTML = '<p>Error loading banned IPs.</p>';
@@ -1277,11 +1284,21 @@ window.fetchJailDetails = function(jail) {
             const bannedIPsContainer = document.getElementById('banned-ips');
             const { bannedIPs } = parseJailStatus(data.status);
             
-            bannedIPsContainer.innerHTML = `
-                <table class="ip-table" id="ip-table"></table>
-            `;
-            
-            renderIPTable(document.getElementById('ip-table'), bannedIPs, jail);
+            if (bannedIPs.length > 0) {
+                bannedIPsContainer.innerHTML = `
+                    <table class="ip-table" id="ip-table"></table>
+                `;
+                renderIPTable(document.getElementById('ip-table'), bannedIPs, jail);
+            } else {
+                bannedIPsContainer.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dee2e6;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🛡️</div>
+                        <h3 style="color: #4a5568; margin-bottom: 0.5rem;">No Banned IPs</h3>
+                        <p style="color: #718096; margin-bottom: 0.5rem;">The jail <strong>${jail}</strong> has no banned IP addresses.</p>
+                        <p style="color: #a0aec0; font-size: 0.875rem;">All connections are currently allowed for this service.</p>
+                    </div>
+                `;
+            }
         })
         .catch(error => {
             console.error('Error:', error);
