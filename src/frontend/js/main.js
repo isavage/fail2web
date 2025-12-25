@@ -24,8 +24,8 @@ function setupEventListeners() {
 
 // Function to render components
 function renderComponents() {
-    // renderJailList() is handled by fetchJails() which runs on page load
-    renderBannedIPs();
+    // renderJailList() and renderBannedIPs() are handled by fetchJails() which runs on page load
+    // fetchJails() will select the first jail by default and display its banned IPs
     loadJailConfigs();
 }
 
@@ -1225,6 +1225,18 @@ function fetchJails() {
             table.appendChild(tbody);
             jailsList.innerHTML = '';
             jailsList.appendChild(table);
+            
+            // Select the first jail by default
+            if (data.jails.length > 0) {
+                const firstJail = data.jails[0];
+                const firstRadio = document.getElementById(`jail-${firstJail}`);
+                if (firstRadio) {
+                    firstRadio.checked = true;
+                    firstRadio.closest('.jail-cell').classList.add('active');
+                    // Fetch jail details for the first jail
+                    fetchJailDetails(firstJail);
+                }
+            }
         })
         .catch(error => {
             console.error('Error fetching jails:', error);
