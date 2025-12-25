@@ -53,6 +53,7 @@
                     <div class="jail-form">
                         <h3>Create/Edit Jail</h3>
                         <form id="jail-form">
+                        <div class="form-row-compact">
                             <div class="form-group">
                                 <label for="jail-name">Jail Name:</label>
                                 <input type="text" id="jail-name" required>
@@ -62,46 +63,56 @@
                                 <select id="jail-filter" onchange="onFilterChange(this.value)" required>
                                     <option value="">Select a filter...</option>
                                 </select>
-                                <input type="text" id="jail-filter-custom" placeholder="Enter custom filter name" style="display: none; margin-top: 0.5rem;">
-                                <div id="filter-content" style="display: none; margin-top: 0.5rem;">
-                                    <label for="filter-regex">Filter Regex:</label>
-                                    <textarea id="filter-regex" rows="4" readonly style="background: #f8f9fa; font-family: monospace; font-size: 0.875rem;"></textarea>
-                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <input type="text" id="jail-filter-custom" placeholder="Enter custom filter name" style="display: none; margin-top: 0.5rem;">
+                            <div id="filter-content" style="display: none; margin-top: 0.5rem;">
+                                <label for="filter-regex">Filter Regex:</label>
+                                <textarea id="filter-regex" rows="4" readonly style="background: #f8f9fa; font-family: monospace; font-size: 0.875rem; width: 100%; box-sizing: border-box;"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="jail-logpath">Log Path:</label>
+                            <input type="text" id="jail-logpath" placeholder="e.g., /var/log/auth.log" required>
+                            <small class="form-hint">Note: This path must be accessible inside the fail2ban container. Ensure the corresponding host path is mounted in docker-compose.yml volumes.</small>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="jail-maxretry">Max Retry:</label>
+                                <input type="number" id="jail-maxretry" value="3" min="1">
                             </div>
                             <div class="form-group">
-                                <label for="jail-logpath">Log Path:</label>
-                                <input type="text" id="jail-logpath" placeholder="e.g., /var/log/auth.log" required>
-                                <small class="form-hint">Note: This path must be accessible inside the fail2ban container. Ensure the corresponding host path is mounted in docker-compose.yml volumes.</small>
+                                <label for="jail-findtime">Find Time (s):</label>
+                                <input type="number" id="jail-findtime" value="3600" min="1">
                             </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="jail-maxretry">Max Retry:</label>
-                                    <input type="number" id="jail-maxretry" value="3" min="1">
-                                </div>
-                                <div class="form-group">
-                                    <label for="jail-findtime">Find Time (s):</label>
-                                    <input type="number" id="jail-findtime" value="3600" min="1">
-                                </div>
-                                <div class="form-group">
-                                    <label for="jail-bantime">Ban Time (s):</label>
-                                    <input type="number" id="jail-bantime" value="600" min="1">
-                                </div>
+                            <div class="form-group">
+                                <label for="jail-bantime">Ban Time (s):</label>
+                                <input type="number" id="jail-bantime" value="600" min="1">
                             </div>
+                        </div>
+                        
+                        <div class="form-row-compact">
                             <div class="form-group">
                                 <label for="jail-action">Action:</label>
                                 <input type="text" id="jail-action" placeholder="e.g., %(action_mw)s">
                             </div>
                             <div class="form-group">
-                                <label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.5rem;">
                                     <input type="checkbox" id="jail-enabled" checked>
                                     Enabled
                                 </label>
                             </div>
-                            <div class="form-buttons">
-                                <button type="submit" class="save-button">Save Jail</button>
-                                <button type="button" onclick="clearJailForm()" class="clear-button">Clear</button>
-                            </div>
-                        </form>
+                        </div>
+                        
+                        <div class="form-buttons">
+                            <button type="submit" class="save-button">Save Jail</button>
+                            <button type="button" onclick="clearJailForm()" class="clear-button">Clear</button>
+                        </div>
+                    </form>
                     </div>
                     <div class="jail-list">
                         <h3>Existing Jails</h3>
