@@ -430,7 +430,7 @@ header {
 background: #4a5568;
 }
 
-.jail-config-list {
+.jail-list #jail-config-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 1rem;
