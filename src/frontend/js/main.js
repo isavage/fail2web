@@ -381,6 +381,8 @@ function removeIgnoreIP(ip) {
 }
 
 function saveIgnoreIPToBackend() {
+    console.log('Auto-saving ignoreIP list:', ignoreIPList);
+    
     authenticatedFetch('/api/ignoreip', {
         method: 'POST',
         body: JSON.stringify({
@@ -399,6 +401,8 @@ function saveIgnoreIPToBackend() {
     })
     .catch(error => {
         console.error('Error auto-saving ignoreIP:', error);
+        // Log the full error for debugging
+        console.error('Full error details:', error);
         // Don't show alert for auto-save errors
         // User can use Refresh button if needed
     });

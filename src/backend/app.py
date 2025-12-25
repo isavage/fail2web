@@ -548,23 +548,84 @@ def get_ignoreip():
 def update_ignoreip():
     try:
         data = request.get_json()
+        logger.debug(f"Received ignoreip data: {data}")
+        
+        if not data or 'ignoreip' not in data:
+            return jsonify({'error': 'Missing ignoreip field in request'}), 400
+            
         ignoreip_list = data.get('ignoreip', [])
         
         if not isinstance(ignoreip_list, list):
             return jsonify({'error': 'ignoreip must be a list'}), 400
         
-        ip_regex = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
-        cidr_regex = r'^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(3[0-2]|[12][0-9]|[0-9])$'
+        logger.debug(f"Processing ignoreip list: {ignoreip_list}")
         
+        # More permissive IP and CIDR validation
+        # Accepts standard IPs (192.168.1.1) and CIDR notation (192.168.1.0/24)
+        ip_regex = r'^(\d{1,3}\.){3}\d{1,3}$'
+        cidr_regex = r'^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+        
+        validated_ips = []
         for ip in ignoreip_list:
-            if not ip.strip():
+            if not ip or not isinstance(ip, str):
                 continue
-            if not (re.match(ip_regex, ip.strip()) or re.match(cidr_regex, ip.strip())):
+                
+            ip = ip.strip()
+            if not ip:
+                continue
+                
+            logger.debug(f"Validating IP: '{ip}'")
+            
+            # Check if it matches IP or CIDR pattern
+            if re.match(ip_regex, ip) or re.match(cidr_regex, ip):
+                # Additional validation for IP octets (0-255)
+                if '/' in ip:
+                    # CIDR notation - validate IP part and CIDR mask (0-32)
+                    ip_part, mask_part = ip.split('/')
+                    octets = ip_part.split('.')
+                    valid = True
+                    
+                    # Validate IP octets
+                    for octet in octets:
+                        if not octet.isdigit() or int(octet) > 255:
+                            valid = False
+                            break
+                    
+                    # Validate CIDR mask (0-32)
+                    if valid and mask_part.isdigit():
+                        mask = int(mask_part)
+                        if mask < 0 or mask > 32:
+                            valid = False
+                    else:
+                        valid = False
+                        
+                    if valid:
+                        validated_ips.append(ip)
+                    else:
+                        logger.warning(f"Invalid CIDR format: {ip}")
+                        return jsonify({'error': f'Invalid CIDR format: {ip}. CIDR mask must be 0-32.'}), 400
+                else:
+                    # Regular IP - validate octets
+                    octets = ip.split('.')
+                    valid = True
+                    for octet in octets:
+                        if not octet.isdigit() or int(octet) > 255:
+                            valid = False
+                            break
+                    if valid:
+                        validated_ips.append(ip)
+                    else:
+                        logger.warning(f"Invalid IP octet range: {ip}")
+                        return jsonify({'error': f'Invalid IP octet range: {ip}'}), 400
+            else:
+                logger.warning(f"Invalid IP/CIDR format: {ip}")
                 return jsonify({'error': f'Invalid IP/CIDR format: {ip}'}), 400
+        
+        logger.debug(f"Validated IPs: {validated_ips}")
         
         config = configparser.ConfigParser()
         config.add_section('DEFAULT')
-        ignoreip_text = '\n            '.join([ip.strip() for ip in ignoreip_list if ip.strip()])
+        ignoreip_text = '\n            '.join(validated_ips)
         config.set('DEFAULT', 'ignoreip', ignoreip_text)
         
         ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
@@ -572,6 +633,8 @@ def update_ignoreip():
         
         with open(ignoreip_file, 'w') as f:
             config.write(f)
+        
+        logger.info(f"Saved {len(validated_ips)} IPs to ignoreIP.conf")
         
         reload_response = fail2ban_command('reload')
         
@@ -583,6 +646,8 @@ def update_ignoreip():
         
     except Exception as e:
         logger.error(f"Error updating ignoreIP configuration: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/banned/<jail_name>')
