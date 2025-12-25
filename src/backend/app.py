@@ -286,6 +286,14 @@ def create_jail_config():
             if not data.get(field):
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
+        # Validate log path exists
+        logpath = data['logpath']
+        if not os.path.exists(logpath):
+            return jsonify({
+                'error': f'Log file not found: {logpath}',
+                'suggestion': 'Make sure the log path is accessible inside the container. Check docker-compose.yml volume mounts.'
+            }), 400
+        
         jail_name = data['name']
         jail_filename = f"{jail_name}.local"
         jail_filepath = Path(jail_d_path) / jail_filename
@@ -314,6 +322,10 @@ def create_jail_config():
         
         # Reload fail2ban to apply changes
         reload_response = fail2ban_command('reload')
+        
+        # Wait a moment for fail2ban to process the reload
+        import time
+        time.sleep(1)
         
         # Also try to start the jail specifically if it's enabled
         if data.get('enabled', True):
