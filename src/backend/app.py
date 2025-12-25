@@ -330,18 +330,6 @@ def create_jail_config():
             logger.error(f"Individual jail status: {jail_status}")
             
             # Try alternative start method
-            logger.info("Trying alternative start method...")
-            alt_start_response = fail2ban_command(f'start {jail_name} --once')
-            logger.info(f"Alternative start response: {alt_start_response}")
-        
-        @app.route('/api/jails/config', methods=['POST'])
-        @token_required
-        def create_jail_config():
-    """Create or update a jail configuration"""
-    try:
-        data = request.get_json()
-        
-        # Validate required fields
         required_fields = ['name', 'filter', 'logpath']
         for field in required_fields:
             if not data.get(field):
