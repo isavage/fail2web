@@ -13,6 +13,7 @@ services:
       # - /opt/app/logs:/var/log/app:ro
       # - /home/user/custom_logs:/var/log/custom:ro
       # - /var/lib/docker/containers:/var/log/docker:ro
+      - fail2ban_data:/var/run/fail2ban  # Create named volume for socket
     extra_hosts:
       - "${EXTRA_HOST}"
     environment:
@@ -39,6 +40,7 @@ services:
       - ./fail2ban/data/jail.d:/data/jail.d:rw  # Mount jail.d for configuration management
       - ./templates:/data/templates:ro  # Mount templates directory
       - ./fail2ban/data:/data/fail2ban:rw  # Mount fail2ban data for direct access
+      - fail2ban_data:/var/run/fail2ban  # Mount fail2ban socket directory
     environment:
       - FAIL2WEB_USERNAME=${FAIL2WEB_USERNAME}
       - FAIL2WEB_PASSWORD=${FAIL2WEB_PASSWORD}
@@ -53,3 +55,6 @@ networks:
     name: fail2web.net
     driver: bridge
     internal: false
+
+volumes:
+  fail2ban_data:  # Named volume for fail2ban socket sharing

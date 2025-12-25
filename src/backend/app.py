@@ -64,8 +64,9 @@ def token_required(f):
 
 def fail2ban_command(cmd):
     try:
-        # Execute fail2ban-client command directly
-        command = ['fail2ban-client', '--socket', '/data/fail2ban/fail2ban.sock'] + cmd.split()
+        # Use the correct socket path that fail2ban is actually using
+        socket_path = '/var/run/fail2ban/fail2ban.sock'
+        command = ['fail2ban-client', '--socket', socket_path] + cmd.split()
         logger.debug(f"Executing command: {' '.join(command)}")
         
         result = subprocess.run(
@@ -85,10 +86,6 @@ def fail2ban_command(cmd):
             logger.error(f"Command failed with return code {result.returncode}: {stderr}")
             return None
         
-        if not stdout and stderr:
-            logger.error(f"Command errored: {stderr}")
-            return None
-        
         if cmd == 'status':
             # Parse jail list from status output
             for line in stdout.split('\n'):
@@ -97,7 +94,6 @@ def fail2ban_command(cmd):
                     if jails_str:
                         return jails_str.split(', ')
                     return []
-            return []
         return stdout
 
     except subprocess.CalledProcessError as e:
