@@ -293,23 +293,17 @@ def create_jail_config():
         # Create config parser
         config = configparser.ConfigParser()
         
-        # Add DEFAULT section
-        config.add_section('DEFAULT')
-        config.set('DEFAULT', 'enabled', str(data.get('enabled', True)).lower())
-        config.set('DEFAULT', 'filter', data['filter'])
-        config.set('DEFAULT', 'logpath', data['logpath'])
-        config.set('DEFAULT', 'maxretry', str(data.get('maxretry', 3)))
-        config.set('DEFAULT', 'findtime', str(data.get('findtime', 3600)))
-        config.set('DEFAULT', 'bantime', str(data.get('bantime', 600)))
+        # Add jail-specific section only (no DEFAULT section)
+        config.add_section(jail_name)
+        config.set(jail_name, 'enabled', str(data.get('enabled', True)).lower())
+        config.set(jail_name, 'filter', data['filter'])
+        config.set(jail_name, 'logpath', data['logpath'])
+        config.set(jail_name, 'maxretry', str(data.get('maxretry', 3)))
+        config.set(jail_name, 'findtime', str(data.get('findtime', 3600)))
+        config.set(jail_name, 'bantime', str(data.get('bantime', 600)))
         
         if data.get('action'):
-            config.set('DEFAULT', 'action', data['action'])
-        
-        # Add jail-specific section
-        config.add_section(jail_name)
-        for key, value in data.items():
-            if key not in ['name'] and value is not None:
-                config.set(jail_name, key, str(value))
+            config.set(jail_name, 'action', data['action'])
         
         # Ensure directory exists
         jail_filepath.parent.mkdir(parents=True, exist_ok=True)
