@@ -37,9 +37,12 @@ jail_d_path = '/data/jail.d'  # Path to jail.d directory in container
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        if not token:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
             return jsonify({'error': 'Token is missing'}), 401
+        
+        # Extract token from "Bearer <token>" format
+        token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
         
         try:
             decoded = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
