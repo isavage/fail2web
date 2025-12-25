@@ -277,6 +277,7 @@ def create_jail_config():
     try:
         data = request.get_json()
         
+        # Validate required fields
         required_fields = ['name', 'filter', 'logpath']
         for field in required_fields:
             if not data.get(field):
@@ -286,63 +287,68 @@ def create_jail_config():
         jail_filename = f"{jail_name}.local"
         jail_filepath = Path(jail_d_path) / jail_filename
         
-        config = configparser.ConfigParser()
-        config['DEFAULT']['include'] = '/data/jail.d/ignoreip.conf'
+        # Write config file
+        write_config_file(jail_filepath, data)
         
-        config.add_section(jail_name)
-        config.set(jail_name, 'enabled', str(data.get('enabled', True)).lower())
-        config.set(jail_name, 'filter', data['filter'])
-        config.set(jail_name, 'logpath', data['logpath'])
-        config.set(jail_name, 'maxretry', str(data.get('maxretry', 3)))
-        config.set(jail_name, 'findtime', str(data.get('findtime', 3600)))
-        config.set(jail_name, 'bantime', str(data.get('bantime', 600)))
+        # Clean reload: stop fail2ban, reload, restart
+        logger.info(f"Performing clean reload for jail {jail_name}")
         
-        if data.get('action'):
-            config.set(jail_name, 'action', data['action'])
+        # Stop fail2ban completely
+        stop_response = fail2ban_command('stop')
+        if stop_response is None:
+            logger.error("Failed to stop fail2ban")
         
-        jail_filepath.parent.mkdir(parents=True, exist_ok=True)
+        # Wait for stop to complete
+        time.sleep(2)
         
-        # Write the config file
-        with open(jail_filepath, 'w') as f:
-            config.write(f)
+        # Start fail2ban (will auto-read new configs)
+        start_response = fail2ban_command('start')
+        if start_response is None:
+            logger.error("Failed to start fail2ban")
         
-        # === CLEAN FIX: Wait for Docker bind mount filesystem sync ===
-        time.sleep(2)  # 2 seconds is sufficient in 99.9% of cases
+        # Wait for startup
+        time.sleep(3)
         
-        logger.info(f"Reloading fail2ban after creating/updating jail {jail_name}")
-        reload_response = fail2ban_command('reload')
-        
-        # === Safety net: If reload fails, start only the new jail ===
-        jail_started = False
-        if reload_response is not None:
-            jail_started = True  # reload succeeded → jail is active
-        elif data.get('enabled', True):
-            logger.info(f"Reload failed for {jail_name}, attempting individual start...")
-            start_response = fail2ban_command(f'start {jail_name}')
-            if start_response is not None:
-                jail_started = True
-                logger.info(f"Jail {jail_name} started individually")
-            else:
-                logger.error(f"Failed to start jail {jail_name} even individually")
-        
-        # Final confirmation
-        time.sleep(0.5)
-        status_check = fail2ban_command('status')
-        if status_check and jail_name in str(status_check):
-            jail_started = True
+        # Verify jail is active
+        status_response = fail2ban_command('status')
+        jail_active = jail_name in str(status_response) if status_response else False
         
         return jsonify({
             'status': 'success',
-            'message': f'Jail {jail_name} configuration saved and activated',
-            'config_written': True,
-            'reload_successful': reload_response is not None,
-            'jail_started': jail_started,
-            'reload_response': str(reload_response) if reload_response else "Failed (fallback start used)"
+            'message': f'Jail {jail_name} created and activated',
+            'jail_active': jail_active,
+            'stop_response': str(stop_response),
+            'start_response': str(start_response),
+            'status_response': str(status_response)
         })
         
     except Exception as e:
         logger.error(f"Error creating jail config: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def write_config_file(filepath, data):
+    """Write configuration file with proper format"""
+    jail_name = data['name']
+    
+    config = configparser.ConfigParser()
+    config['DEFAULT']['include'] = '/data/jail.d/ignoreip.conf'
+    
+    config.add_section(jail_name)
+    config.set(jail_name, 'enabled', str(data.get('enabled', True)).lower())
+    config.set(jail_name, 'filter', data['filter'])
+    config.set(jail_name, 'logpath', data['logpath'])
+    config.set(jail_name, 'maxretry', str(data.get('maxretry', 3)))
+    config.set(jail_name, 'findtime', str(data.get('findtime', 3600)))
+    config.set(jail_name, 'bantime', str(data.get('bantime', 600)))
+    
+    if data.get('action'):
+        config.set(jail_name, 'action', data['action'])
+    
+    # Ensure directory exists
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(filepath, 'w') as f:
+        config.write(f)
 
 @app.route('/api/jails/config/<jail_name>', methods=['DELETE'])
 @token_required
