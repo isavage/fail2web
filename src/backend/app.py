@@ -561,9 +561,11 @@ def update_ignoreip():
         logger.debug(f"Processing ignoreip list: {ignoreip_list}")
         
         # More permissive IP and CIDR validation
-        # Accepts standard IPs (192.168.1.1) and CIDR notation (192.168.1.0/24)
-        ip_regex = r'^(\d{1,3}\.){3}\d{1,3}$'
+        # Accepts IPv4 (192.168.1.1), IPv6 (::1), and CIDR notation
+        ipv4_regex = r'^(\d{1,3}\.){3}\d{1,3}$'
+        ipv6_regex = r'^([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{1,4}$|^::1$|^::$'
         cidr_regex = r'^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+        ipv6_cidr_regex = r'^([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{1,4}/\d{1,3}$|^::/\d{1,3}$|^::1/\d{1,3}$'
         
         validated_ips = []
         for ip in ignoreip_list:
@@ -577,46 +579,70 @@ def update_ignoreip():
             logger.debug(f"Validating IP: '{ip}'")
             
             # Check if it matches IP or CIDR pattern
-            if re.match(ip_regex, ip) or re.match(cidr_regex, ip):
-                # Additional validation for IP octets (0-255)
+            if (re.match(ipv4_regex, ip) or re.match(ipv6_regex, ip) or 
+                re.match(cidr_regex, ip) or re.match(ipv6_cidr_regex, ip)):
+                
+                # Determine if it's IPv4 or IPv6
+                is_ipv4 = re.match(ipv4_regex, ip) or re.match(cidr_regex, ip)
+                is_ipv6 = re.match(ipv6_regex, ip) or re.match(ipv6_cidr_regex, ip)
+                
                 if '/' in ip:
-                    # CIDR notation - validate IP part and CIDR mask (0-32)
+                    # CIDR notation - validate IP part and CIDR mask
                     ip_part, mask_part = ip.split('/')
-                    octets = ip_part.split('.')
                     valid = True
                     
-                    # Validate IP octets
-                    for octet in octets:
-                        if not octet.isdigit() or int(octet) > 255:
-                            valid = False
-                            break
-                    
-                    # Validate CIDR mask (0-32)
-                    if valid and mask_part.isdigit():
-                        mask = int(mask_part)
-                        if mask < 0 or mask > 32:
-                            valid = False
-                    else:
-                        valid = False
+                    if is_ipv4:
+                        # IPv4 CIDR - validate octets (0-255) and mask (0-32)
+                        octets = ip_part.split('.')
+                        for octet in octets:
+                            if not octet.isdigit() or int(octet) > 255:
+                                valid = False
+                                break
                         
-                    if valid:
-                        validated_ips.append(ip)
-                    else:
-                        logger.warning(f"Invalid CIDR format: {ip}")
-                        return jsonify({'error': f'Invalid CIDR format: {ip}. CIDR mask must be 0-32.'}), 400
-                else:
-                    # Regular IP - validate octets
-                    octets = ip.split('.')
-                    valid = True
-                    for octet in octets:
-                        if not octet.isdigit() or int(octet) > 255:
+                        # Validate CIDR mask (0-32)
+                        if valid and mask_part.isdigit():
+                            mask = int(mask_part)
+                            if mask < 0 or mask > 32:
+                                valid = False
+                        else:
                             valid = False
-                            break
+                    else:
+                        # IPv6 CIDR - validate mask (0-128)
+                        if mask_part.isdigit():
+                            mask = int(mask_part)
+                            if mask < 0 or mask > 128:
+                                valid = False
+                        else:
+                            valid = False
+                            
                     if valid:
                         validated_ips.append(ip)
                     else:
-                        logger.warning(f"Invalid IP octet range: {ip}")
-                        return jsonify({'error': f'Invalid IP octet range: {ip}'}), 400
+                        error_msg = f'Invalid CIDR format: {ip}'
+                        if is_ipv4:
+                            error_msg += '. IPv4 CIDR mask must be 0-32.'
+                        else:
+                            error_msg += '. IPv6 CIDR mask must be 0-128.'
+                        logger.warning(error_msg)
+                        return jsonify({'error': error_msg}), 400
+                else:
+                    # Regular IP (no CIDR)
+                    if is_ipv4:
+                        # IPv4 - validate octets (0-255)
+                        octets = ip.split('.')
+                        valid = True
+                        for octet in octets:
+                            if not octet.isdigit() or int(octet) > 255:
+                                valid = False
+                                break
+                        if valid:
+                            validated_ips.append(ip)
+                        else:
+                            logger.warning(f"Invalid IPv4 octet range: {ip}")
+                            return jsonify({'error': f'Invalid IPv4 octet range: {ip}'}), 400
+                    else:
+                        # IPv6 - already validated by regex, accept it
+                        validated_ips.append(ip)
             else:
                 logger.warning(f"Invalid IP/CIDR format: {ip}")
                 return jsonify({'error': f'Invalid IP/CIDR format: {ip}'}), 400
