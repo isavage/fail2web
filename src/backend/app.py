@@ -315,6 +315,11 @@ def create_jail_config():
         # Reload fail2ban to apply changes
         reload_response = fail2ban_command('reload')
         
+        # Also try to start the jail specifically if it's enabled
+        if data.get('enabled', True):
+            start_response = fail2ban_command(f'start {jail_name}')
+            logger.info(f"Started jail {jail_name}: {start_response}")
+        
         return jsonify({
             'status': 'success',
             'message': f'Jail {jail_name} created/updated successfully',
