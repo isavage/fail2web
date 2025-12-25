@@ -85,7 +85,7 @@ function setFilterDefaults(filterValue) {
     const filterDefaults = {
         'sshd': {
             name: 'sshd',
-            logpath: '/var/log/auth.log',
+            logpath: '%(syslog_authpriv)s',  // Use fail2ban variable instead of hardcoded path
             maxretry: 3,
             findtime: 3600,
             bantime: 600
@@ -99,7 +99,7 @@ function setFilterDefaults(filterValue) {
         },
         'sshd2': {
             name: 'sshd2',
-            logpath: '/var/log/auth.log',
+            logpath: '%(syslog_authpriv)s',  // Use fail2ban variable instead of hardcoded path
             maxretry: 3,
             findtime: 1800,
             bantime: 3600
@@ -966,6 +966,12 @@ window.handleJailSelection = function(jail) {
 };
 
 window.fetchJailDetails = function(jail) {
+    const token = getToken();
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
+    
     fetch(`/api/banned/${jail}`, { headers })
         .then(response => response.json())
         .then(data => {
@@ -988,6 +994,12 @@ window.fetchJailDetails = function(jail) {
 // Update unbanIP to use headers
 window.unbanIP = function(jail, ip) {
     if (!confirm(`Are you sure you want to unban ${ip} from ${jail}?`)) return;
+
+    const token = getToken();
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
 
     fetch('/api/unban', {
         method: 'POST',

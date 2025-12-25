@@ -343,27 +343,38 @@ def create_jail_config():
         # Wait a moment for fail2ban to process the reload
         time.sleep(1)
         
-        # Also try to start the jail specifically if it's enabled
-        if data.get('enabled', True):
-            logger.info(f"Attempting to start jail {jail_name}...")
-            start_response = fail2ban_command(f'start {jail_name}')
-            logger.info(f"Start jail response: {start_response}")
-            
-            # Check if jail actually started by getting status
-            time.sleep(0.5)  # Give it a moment to start
-            status_response = fail2ban_command('status')
-            logger.info(f"Current jail status after start: {status_response}")
-            
-            if status_response and jail_name not in str(status_response):
-                logger.warning(f"Jail {jail_name} might not have started")
-                # Try to get more details about the failure
-                jail_status = fail2ban_command(f'status {jail_name}')
-                logger.warning(f"Jail {jail_name} status: {jail_status}")
+        # Only try to start the jail if reload was successful
+        jail_started = False
+        if reload_response is not None and 'error' not in str(reload_response).lower():
+            if data.get('enabled', True):
+                logger.info(f"Attempting to start jail {jail_name}...")
+                start_response = fail2ban_command(f'start {jail_name}')
+                logger.info(f"Start jail response: {start_response}")
+                
+                # Check if jail actually started by getting status
+                time.sleep(0.5)  # Give it a moment to start
+                status_response = fail2ban_command('status')
+                logger.info(f"Current jail status after start: {status_response}")
+                
+                if status_response and jail_name in str(status_response):
+                    jail_started = True
+                else:
+                    logger.warning(f"Jail {jail_name} might not have started")
+                    # Try to get more details about the failure
+                    jail_status = fail2ban_command(f'status {jail_name}')
+                    logger.warning(f"Jail {jail_name} status: {jail_status}")
+        else:
+            logger.warning(f"Reload failed or had errors, not attempting to start jail {jail_name}")
         
+        # Return success even if reload failed, as config file was written
+        # User can manually reload fail2ban later if needed
         return jsonify({
             'status': 'success',
-            'message': f'Jail {jail_name} created/updated successfully',
-            'reload_response': reload_response
+            'message': f'Jail {jail_name} configuration saved successfully',
+            'config_written': True,
+            'reload_successful': reload_response is not None and 'error' not in str(reload_response).lower(),
+            'jail_started': jail_started,
+            'reload_response': str(reload_response) if reload_response else None
         })
         
     except Exception as e:
