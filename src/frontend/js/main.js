@@ -296,14 +296,33 @@ function renderIgnoreIPList() {
         return;
     }
     
-    ignoreIPList.forEach(ip => {
-        const ipItem = document.createElement('div');
-        ipItem.className = 'ignoreip-item';
-        ipItem.innerHTML = `
-            <span>${ip}</span>
-            <button class="remove-ip-button" onclick="removeIgnoreIP('${ip}')">Remove</button>
-        `;
-        container.appendChild(ipItem);
+    // Group IPs in rows of 4-5 per line
+    const ipsPerRow = 4;
+    const rows = [];
+    
+    for (let i = 0; i < ignoreIPList.length; i += ipsPerRow) {
+        rows.push(ignoreIPList.slice(i, i + ipsPerRow));
+    }
+    
+    rows.forEach(row => {
+        const rowItem = document.createElement('div');
+        rowItem.className = 'ignoreip-row';
+        
+        const ipContainer = document.createElement('div');
+        ipContainer.className = 'ip-container';
+        
+        row.forEach((ip, index) => {
+            const ipItem = document.createElement('div');
+            ipItem.className = 'ignoreip-item-inline';
+            ipItem.innerHTML = `
+                <span class="ip-text">${ip}</span>
+                <button class="remove-ip-button-small" onclick="removeIgnoreIP('${ip}')">×</button>
+            `;
+            ipContainer.appendChild(ipItem);
+        });
+        
+        rowItem.appendChild(ipContainer);
+        container.appendChild(rowItem);
     });
 }
 

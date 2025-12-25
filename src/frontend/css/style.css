@@ -163,6 +163,38 @@ header {
     background: #f8f9fa;
 }
 
+/* New inline layout for multiple IPs per row */
+.ignoreip-row {
+    margin-bottom: 0.75rem;
+}
+
+.ip-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ignoreip-item-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    border-left: 3px solid var(--success-color);
+    font-size: 0.875rem;
+}
+
+.ignoreip-item-inline:hover {
+    background: #e9ecef;
+}
+
+.ip-text {
+    font-family: monospace;
+    color: #495057;
+}
+
 .remove-ip-button {
     background: var(--danger-color);
     color: white;
@@ -171,11 +203,28 @@ header {
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.75rem;
-    font-weight: 500;
-    transition: background-color 0.2s;
 }
 
 .remove-ip-button:hover {
+    background: #c53030;
+}
+
+.remove-ip-button-small {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.remove-ip-button-small:hover {
     background: #c53030;
 }
 
