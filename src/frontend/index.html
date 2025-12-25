@@ -33,9 +33,10 @@
                     <div class="jail-form">
                         <h3>Create/Edit Jail</h3>
                         <div class="template-section">
-                            <label for="jail-template">Start from Template:</label>
-                            <select id="jail-template" onchange="loadTemplate()">
-                                <option value="">-- Custom Configuration --</option>
+                            <label for="jail-template">Template:</label>
+                            <select id="jail-template" onchange="onTemplateChange(this.value)">
+                                <option value="">-- Select Template --</option>
+                                <option value="custom">Custom (configure manually)</option>
                             </select>
                             <button type="button" onclick="loadTemplates()" class="refresh-button">Refresh Templates</button>
                         </div>
@@ -46,66 +47,14 @@
                             </div>
                             <div class="form-group">
                                 <label for="jail-filter">Filter:</label>
-                                <select id="jail-filter" required>
-                                    <option value="">Select a filter...</option>
-                                    <option value="sshd">SSH (sshd)</option>
-                                    <option value="nginx">Nginx (nginx)</option>
-                                    <option value="sshd2">SSH Enhanced (sshd2)</option>
-                                    <option value="apache-auth">Apache Auth (apache-auth)</option>
-                                    <option value="apache-badbots">Apache Bad Bots (apache-badbots)</option>
-                                    <option value="apache-botsearch">Apache Bot Search (apache-botsearch)</option>
-                                    <option value="apache-common">Apache Common (apache-common)</option>
-                                    <option value="apache-fakegooglebot">Apache Fake Googlebot (apache-fakegooglebot)</option>
-                                    <option value="apache-modsecurity">Apache ModSecurity (apache-modsecurity)</option>
-                                    <option value="apache-nohome">Apache No Home (apache-nohome)</option>
-                                    <option value="apache-noscript">Apache No Script (apache-noscript)</option>
-                                    <option value="apache-overflows">Apache Overflows (apache-overflows)</option>
-                                    <option value="apache-pass">Apache Pass (apache-pass)</option>
-                                    <option value="apache-shellshock">Apache Shellshock (apache-shellshock)</option>
-                                    <option value="vsftpd">VSFTPD (vsftpd)</option>
-                                    <option value="proftpd">ProFTPD (proftpd)</option>
-                                    <option value="pure-ftpd">Pure-FTPd (pure-ftpd)</option>
-                                    <option value="wuftpd">WU-FTPd (wuftpd)</option>
-                                    <option value="postfix">Postfix (postfix)</option>
-                                    <option value="sendmail-auth">Sendmail Auth (sendmail-auth)</option>
-                                    <option value="sendmail-reject">Sendmail Reject (sendmail-reject)</option>
-                                    <option value="exim">Exim (exim)</option>
-                                    <option value="dovecot">Dovecot (dovecot)</option>
-                                    <option value="sieve">Sieve (sieve)</option>
-                                    <option value="solid-pop3d">Solid POP3d (solid-pop3d)</option>
-                                    <option value="courier-auth">Courier Auth (courier-auth)</option>
-                                    <option value="courier-smtp">Courier SMTP (courier-smtp)</option>
-                                    <option value="named">BIND9 (named)</option>
-                                    <option value="recidive">Recidive (recidive)</option>
-                                    <option value="murmur">Mumble (murmur)</option>
-                                    <option value="asterisk">Asterisk (asterisk)</option>
-                                    <option value="freeswitch">FreeSWITCH (freeswitch)</option>
-                                    <option value="mysqld">MySQL (mysqld)</option>
-                                    <option value="mysqld-auth">MySQL Auth (mysqld-auth)</option>
-                                    <option value="oracle">Oracle (oracle)</option>
-                                    <option value="php-url-fopen">PHP URL Fopen (php-url-fopen)</option>
-                                    <option value="roundcube-auth">Roundcube Auth (roundcube-auth)</option>
-                                    <option value="openwebmail">OpenWebMail (openwebmail)</option>
-                                    <option value="horde">Horde (horde)</option>
-                                    <option value="groupoffice">GroupOffice (groupoffice)</option>
-                                    <option value="sogo">SOGo (sogo)</option>
-                                    <option value="tomcat">Tomcat (tomcat)</option>
-                                    <option value="monit">Monit (monit)</option>
-                                    <option value="webmin">Webmin (webmin)</option>
-                                    <option value="drupal-auth">Drupal Auth (drupal-auth)</option>
-                                    <option value="magento">Magento (magento)</option>
-                                    <option value="wordpress">WordPress (wordpress)</option>
-                                    <option value="phpmyadmin">phpMyAdmin (phpmyadmin)</option>
-                                    <option value="guacamole">Guacamole (guacamole)</option>
-                                    <option value="slapd">OpenLDAP (slapd)</option>
-                                    <option value="directadmin">DirectAdmin (directadmin)</option>
-                                    <option value="iptables">iptables (iptables)</option>
-                                    <option value="nginx-http-auth">Nginx HTTP Auth (nginx-http-auth)</option>
-                                    <option value="nginx-limit-req">Nginx Limit Requests (nginx-limit-req)</option>
-                                    <option value="nginx-botsearch">Nginx Bot Search (nginx-botsearch)</option>
-                                    <option value="custom">Custom (specify below)</option>
+                                <select id="jail-filter" onchange="onFilterChange(this.value)" disabled>
+                                    <option value="">Select template first...</option>
                                 </select>
                                 <input type="text" id="jail-filter-custom" placeholder="Enter custom filter name" style="display: none; margin-top: 0.5rem;">
+                                <div id="filter-content" style="display: none; margin-top: 0.5rem;">
+                                    <label for="filter-regex">Filter Regex:</label>
+                                    <textarea id="filter-regex" rows="4" readonly style="background: #f8f9fa; font-family: monospace; font-size: 0.875rem;"></textarea>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label for="jail-logpath">Log Path:</label>

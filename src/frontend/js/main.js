@@ -33,6 +33,149 @@ function renderComponents() {
 let jailTemplates = {};
 let ignoreIPList = [];
 
+function onTemplateChange(templateValue) {
+    const filterSelect = document.getElementById('jail-filter');
+    const customFilterInput = document.getElementById('jail-filter-custom');
+    const filterContent = document.getElementById('filter-content');
+    const jailName = document.getElementById('jail-name');
+    
+    if (templateValue === 'custom') {
+        // Enable manual configuration
+        filterSelect.disabled = false;
+        populateFilterOptions();
+        filterContent.style.display = 'none';
+        
+        // Clear form fields
+        clearJailForm();
+        jailName.disabled = false;
+    } else if (templateValue === '') {
+        // No template selected
+        filterSelect.disabled = true;
+        filterSelect.innerHTML = '<option value="">Select template first...</option>';
+        filterContent.style.display = 'none';
+        clearJailForm();
+        jailName.disabled = true;
+    } else {
+        // Template selected
+        loadTemplate(templateValue);
+        jailName.disabled = false;
+    }
+}
+
+function onFilterChange(filterValue) {
+    const customFilterInput = document.getElementById('jail-filter-custom');
+    const filterContent = document.getElementById('filter-content');
+    const filterRegex = document.getElementById('filter-regex');
+    
+    if (filterValue === 'custom') {
+        customFilterInput.style.display = 'block';
+        customFilterInput.required = true;
+        filterContent.style.display = 'none';
+    } else if (filterValue === '') {
+        customFilterInput.style.display = 'none';
+        customFilterInput.required = false;
+        filterContent.style.display = 'none';
+    } else {
+        customFilterInput.style.display = 'none';
+        customFilterInput.required = false;
+        // Load filter content
+        loadFilterContent(filterValue);
+    }
+}
+
+function loadFilterContent(filterName) {
+    fetch(`/api/filters/${filterName}`, {
+        headers: {
+            'Authorization': 'Bearer ' + getToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const filterContent = document.getElementById('filter-content');
+            const filterRegex = document.getElementById('filter-regex');
+            
+            filterRegex.value = data.content;
+            filterContent.style.display = 'block';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading filter content:', error);
+    });
+}
+
+function populateFilterOptions() {
+    const filterSelect = document.getElementById('jail-filter');
+    
+    // Common filter options
+    const filters = [
+        { value: 'sshd', text: 'SSH (sshd)' },
+        { value: 'nginx', text: 'Nginx (nginx)' },
+        { value: 'sshd2', text: 'SSH Enhanced (sshd2)' },
+        { value: 'apache-auth', text: 'Apache Auth (apache-auth)' },
+        { value: 'apache-badbots', text: 'Apache Bad Bots (apache-badbots)' },
+        { value: 'apache-botsearch', text: 'Apache Bot Search (apache-botsearch)' },
+        { value: 'apache-common', text: 'Apache Common (apache-common)' },
+        { value: 'apache-fakegooglebot', text: 'Apache Fake Googlebot (apache-fakegooglebot)' },
+        { value: 'apache-modsecurity', text: 'Apache ModSecurity (apache-modsecurity)' },
+        { value: 'apache-nohome', text: 'Apache No Home (apache-nohome)' },
+        { value: 'apache-noscript', text: 'Apache No Script (apache-noscript)' },
+        { value: 'apache-overflows', text: 'Apache Overflows (apache-overflows)' },
+        { value: 'apache-pass', text: 'Apache Pass (apache-pass)' },
+        { value: 'apache-shellshock', text: 'Apache Shellshock (apache-shellshock)' },
+        { value: 'vsftpd', text: 'VSFTPD (vsftpd)' },
+        { value: 'proftpd', text: 'ProFTPD (proftpd)' },
+        { value: 'pure-ftpd', text: 'Pure-FTPd (pure-ftpd)' },
+        { value: 'wuftpd', text: 'WU-FTPd (wuftpd)' },
+        { value: 'postfix', text: 'Postfix (postfix)' },
+        { value: 'sendmail-auth', text: 'Sendmail Auth (sendmail-auth)' },
+        { value: 'sendmail-reject', text: 'Sendmail Reject (sendmail-reject)' },
+        { value: 'exim', text: 'Exim (exim)' },
+        { value: 'dovecot', text: 'Dovecot (dovecot)' },
+        { value: 'sieve', text: 'Sieve (sieve)' },
+        { value: 'solid-pop3d', text: 'Solid POP3d (solid-pop3d)' },
+        { value: 'courier-auth', text: 'Courier Auth (courier-auth)' },
+        { value: 'courier-smtp', text: 'Courier SMTP (courier-smtp)' },
+        { value: 'named', text: 'BIND9 (named)' },
+        { value: 'recidive', text: 'Recidive (recidive)' },
+        { value: 'murmur', text: 'Mumble (murmur)' },
+        { value: 'asterisk', text: 'Asterisk (asterisk)' },
+        { value: 'freeswitch', text: 'FreeSWITCH (freeswitch)' },
+        { value: 'mysqld', text: 'MySQL (mysqld)' },
+        { value: 'mysqld-auth', text: 'MySQL Auth (mysqld-auth)' },
+        { value: 'oracle', text: 'Oracle (oracle)' },
+        { value: 'php-url-fopen', text: 'PHP URL Fopen (php-url-fopen)' },
+        { value: 'roundcube-auth', text: 'Roundcube Auth (roundcube-auth)' },
+        { value: 'openwebmail', text: 'OpenWebMail (openwebmail)' },
+        { value: 'horde', text: 'Horde (horde)' },
+        { value: 'groupoffice', text: 'GroupOffice (groupoffice)' },
+        { value: 'sogo', text: 'SOGo (sogo)' },
+        { value: 'tomcat', text: 'Tomcat (tomcat)' },
+        { value: 'monit', text: 'Monit (monit)' },
+        { value: 'webmin', text: 'Webmin (webmin)' },
+        { value: 'drupal-auth', text: 'Drupal Auth (drupal-auth)' },
+        { value: 'magento', text: 'Magento (magento)' },
+        { value: 'wordpress', text: 'WordPress (wordpress)' },
+        { value: 'phpmyadmin', text: 'phpMyAdmin (phpmyadmin)' },
+        { value: 'guacamole', text: 'Guacamole (guacamole)' },
+        { value: 'slapd', text: 'OpenLDAP (slapd)' },
+        { value: 'directadmin', text: 'DirectAdmin (directadmin)' },
+        { value: 'iptables', text: 'iptables (iptables)' },
+        { value: 'nginx-http-auth', text: 'Nginx HTTP Auth (nginx-http-auth)' },
+        { value: 'nginx-limit-req', text: 'Nginx Limit Requests (nginx-limit-req)' },
+        { value: 'nginx-botsearch', text: 'Nginx Bot Search (nginx-botsearch)' },
+        { value: 'custom', text: 'Custom (specify below)' }
+    ];
+    
+    filterSelect.innerHTML = '<option value="">Select a filter...</option>';
+    filters.forEach(filter => {
+        const option = document.createElement('option');
+        option.value = filter.value;
+        option.textContent = filter.text;
+        filterSelect.appendChild(option);
+    });
+}
+
 function showJailConfig() {
     document.getElementById('jails-section').style.display = 'none';
     document.getElementById('banned-ips-section').style.display = 'none';
@@ -41,19 +184,45 @@ function showJailConfig() {
     loadTemplates();
     loadIgnoreIP();
     
-    // Add filter change listener
+    // Initialize form state
+    document.getElementById('jail-name').disabled = true;
+    document.getElementById('jail-filter').disabled = true;
+}
+
+function loadTemplate(templateName) {
+    const templateSelect = document.getElementById('jail-template');
+    const logpathInput = document.getElementById('jail-logpath');
     const filterSelect = document.getElementById('jail-filter');
     const customFilterInput = document.getElementById('jail-filter-custom');
+    const filterContent = document.getElementById('filter-content');
     
-    filterSelect.addEventListener('change', function() {
-        if (this.value === 'custom') {
-            customFilterInput.style.display = 'block';
-            customFilterInput.required = true;
-        } else {
+    if (templateName && jailTemplates[templateName]) {
+        const template = jailTemplates[templateName];
+        
+        // Fill form fields
+        document.getElementById('jail-name').value = templateName.replace('-template', '');
+        document.getElementById('jail-maxretry').value = template.maxretry || 3;
+        document.getElementById('jail-findtime').value = template.findtime || 3600;
+        document.getElementById('jail-bantime').value = template.bantime || 600;
+        document.getElementById('jail-action').value = template.action || '';
+        logpathInput.value = template.logpath || '';
+        
+        // Set filter selection and populate options
+        populateFilterOptions();
+        if (template.filter) {
+            filterSelect.value = template.filter;
             customFilterInput.style.display = 'none';
-            customFilterInput.required = false;
+            // Load filter content
+            loadFilterContent(template.filter);
+        } else {
+            filterSelect.value = 'custom';
+            customFilterInput.style.display = 'block';
+            customFilterInput.value = template.filter || '';
+            filterContent.style.display = 'none';
         }
-    });
+        
+        document.getElementById('jail-enabled').checked = template.enabled !== false;
+    }
 }
 
 function hideJailConfig() {
@@ -62,7 +231,11 @@ function hideJailConfig() {
     document.getElementById('banned-ips-section').style.display = 'block';
 }
 
-// ignoreIP Management Functions
+function clearJailForm() {
+    document.getElementById('jail-form').reset();
+    document.getElementById('filter-content').style.display = 'none';
+    document.getElementById('jail-filter-custom').style.display = 'none';
+}
 function loadIgnoreIP() {
     fetch('/api/ignoreip', {
         headers: {

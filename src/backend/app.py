@@ -421,6 +421,36 @@ def get_jail_templates():
         logger.error(f"Error loading jail templates: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/filters/<filter_name>')
+@token_required
+def get_filter_content(filter_name):
+    """Get filter file content for display"""
+    try:
+        # Try to find the filter file in common locations
+        filter_paths = [
+            f'/etc/fail2ban/filter.d/{filter_name}.conf',
+            f'/data/fail2ban/filter.d/{filter_name}.conf',
+            f'/app/fail2ban/data/filter.d/{filter_name}.conf'
+        ]
+        
+        content = None
+        for path in filter_paths:
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    content = f.read()
+                break
+        
+        if content is None:
+            return jsonify({'error': f'Filter {filter_name} not found'}), 404
+        
+        return jsonify({
+            'status': 'success',
+            'content': content
+        })
+    except Exception as e:
+        logger.error(f"Error reading filter {filter_name}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/jails/create-from-template', methods=['POST'])
 @token_required
 def create_jail_from_template():
