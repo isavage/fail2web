@@ -1,0 +1,164 @@
+.login-page {
+    background: radial-gradient(circle at top left, rgba(99, 179, 237, 0.1), var(--background-color) 70%);
+    background-image: url('data:image/svg+xml;utf8,<svg width="60" height="60" xmlns="http://www.w3.org/2000/svg"><line x1="30" y1="26" x2="30" y2="34" stroke="%232d3748" stroke-width="0.2"/><line x1="26" y1="30" x2="34" y2="30" stroke="%232d3748" stroke-width="0.2"/></svg>');
+    background-size: 40px 40px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.login-container {
+    width: 100%;
+    max-width: 500px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.9); /* Original opacity */
+    backdrop-filter: blur(5px);
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px;
+    position: relative;
+    /*box-sizing: border-box;
+     overflow: hidden; */ /* Removed */
+    transition: all 0.4s ease-out;
+}
+
+.login-container::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    width: calc(50% + 3px); /* Covers 50% top */
+    height: calc(25% + 3px); /* Covers 25% left */
+    background: 
+        linear-gradient(90deg, #ec4899 0%, #45b7d1 100%) 0 0 / 100% 3px no-repeat, /* Top border */
+        linear-gradient(180deg, #ec4899 0%, #45b7d1 100%) 0 0 / 3px 100% no-repeat; /* Left border */
+    border-radius: 11px 0 0 0; /* Curve only top-left */
+    z-index: -1; /* Behind content */
+    pointer-events: none;
+    animation: gradientShift 8s infinite ease-in-out;
+}
+
+.login-container > * { /* Ensure content is positioned and clipped to curve */
+    position: relative;
+    border-radius: 5px; /* Match container’s radius */
+    overflow: hidden; /* Clip content to match curve */
+    padding: 2rem; /* Padding for content */
+}
+
+@keyframes gradientShift {
+    0% { background: linear-gradient(90deg, #ec4899 0%, #45b7d1 100%) 0 0 / 100% 3px no-repeat, linear-gradient(180deg, #ec4899 0%, #45b7d1 100%) 0 0 / 3px 100% no-repeat; }
+    50% { background: linear-gradient(90deg, #45b7d1 0%, #ec4899 100%) 0 0 / 100% 3px no-repeat, linear-gradient(180deg, #45b7d1 0%, #ec4899 100%) 0 0 / 3px 100% no-repeat; }
+    100% { background: linear-gradient(90deg, #ec4899 0%, #45b7d1 100%) 0 0 / 100% 3px no-repeat, linear-gradient(180deg, #ec4899 0%, #45b7d1 100%) 0 0 / 3px 100% no-repeat; }
+}
+
+.login-container:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.login-container h1 {
+    text-align: center;
+    margin-bottom: 2rem;
+    background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Adjust form elements to be more compact */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-group label {
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.625rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    box-sizing: border-box;
+    transition: all 0.3s ease-out; /* Smooth focus */
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.login-button {
+    width: 100%;
+    margin-top: 0.75rem;
+    padding: 0.625rem;
+    background: linear-gradient(135deg, var(--secondary-color), #63b3ed); /* Matching gradient */
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease-out; /* Smooth hover */
+    box-sizing: border-box;
+}
+
+.login-button:hover {
+    background: linear-gradient(135deg, #2980b9, var(--secondary-color));
+    transform: translateY(-1px);
+}
+
+.error-message {
+    width: 100%;
+    margin-top: 1rem;
+    background: linear-gradient(135deg, rgba(255, 245, 245, 0.9), rgba(229, 62, 62, 0.1)); /* Subtle gradient */
+    color: var(--danger-color);
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    display: none;
+    box-sizing: border-box;
+    transition: all 0.3s ease-out;
+}
+
+/* Header container styling */
+.header-container {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+/* Main header (Fail2Web) */
+.header-container h1 {
+    text-align: center;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.5rem;
+    font-weight: 700; /* Bolder for prominence */
+}
+
+/* Subheader (Fail2Ban Web Management) */
+.header-container h2 {
+    text-align: center;
+    color: #718096;
+    font-weight: 300;
+    font-size: 1.25rem;
+    margin: 0;
+    transition: color 0.3s ease-out; /* Smooth color shift */
+}
+
+.header-container:hover h2 {
+    color: var(--secondary-color); /* Subtle hover effect */
+}

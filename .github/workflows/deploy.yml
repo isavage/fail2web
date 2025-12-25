@@ -1,0 +1,109 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'prod-IN'
+        type: choice
+        options:
+        - prod-IN
+        - prod-NL
+      cleanup:
+        description: 'Clean up persistent directories before deploying'
+        required: false
+        type: boolean
+        default: false
+      
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Upload files to temporary directory on VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          source: ".,!.git*,!.github*,!.gitignore,.env"
+          target: "/tmp/fail2web-deploy-temp/"
+          strip_components: 1
+          overwrite: true
+
+      - name: Cleanup (if needed), move files, and finalize deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            TARGET_DIR="/docker/fail2web"
+            TEMP_DIR="/tmp/fail2web-deploy-temp"
+
+            # Ensure target exists
+            mkdir -p "$TARGET_DIR"
+            cd "$TARGET_DIR"
+
+            # Optional cleanup: wipe everything except .env and fail2ban/data
+            if [[ "${{ inputs.cleanup }}" == "true" ]]; then
+              echo "🧹 Cleaning up persistent directories (keeping .env and fail2ban/data)..."
+              find . -mindepth 1 -not -path './.env' -not -path './fail2ban/data*' -delete
+            fi
+
+            # Move files from temp to target (fast, atomic-ish)
+            echo "🚚 Moving new files to $TARGET_DIR..."
+            rsync -av --no-perms --no-owner --no-group --exclude='.env' --exclude='fail2ban/data' "$TEMP_DIR"/. ./
+
+            # Clean up temp directory
+            rm -rf "$TEMP_DIR"
+
+            # Set permissions
+            chmod -R 750 . 2>/dev/null || true
+            [ -f .env ] && chmod 640 .env
+
+            # Validate
+            if [ ! -f .env ]; then
+              echo "❌ .env file missing!"
+              exit 1
+            fi
+
+            if [ ! -f docker-compose.yml ]; then
+              echo "❌ docker-compose.yml missing!"
+              exit 1
+            fi
+
+            # Validate required environment variables
+            for var in FAIL2WEB_USERNAME FAIL2WEB_PASSWORD FAIL2WEB_SECRET_KEY TZ; do
+              grep -q "^$var=" .env || { echo "❌ Missing $var in .env"; exit 1; }
+            done
+            echo "✅ .env validated"
+
+            # Restart services
+            echo "🚀 Restarting services..."
+            docker compose down || true
+            docker compose up -d --build
+
+            # Wait for services to start
+            echo "⏳ Waiting for services to start..."
+            sleep 10
+
+            # Verify services are running
+            if ! docker compose ps | grep -q "Up"; then
+              echo "❌ Services failed to start!"
+              docker compose logs
+              exit 1
+            fi
+            echo "✅ Services running"
+
+            echo "🎉 fail2web deployment completed successfully!"

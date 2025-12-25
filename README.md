@@ -16,12 +16,48 @@ fail2web is a lightweight docker container web application designed to interact 
 
 2. Rename .env.example to .env 
 
-    FAIL2WEB_USERNAME=admin
-    FAIL2WEB_PASSWORD=password
-    FAIL2WEB_SECRET_KEY=you_secret_key
-    FAIL2BAN_CONTAINER_NAME=
+## Configuration
 
+### Environment Variables
+Create a `.env` file with the following variables:
+```bash
+FAIL2WEB_USERNAME=admin
+FAIL2WEB_PASSWORD=your_secure_password
+FAIL2WEB_SECRET_KEY=your_jwt_secret_key
+TZ=America/New_York
+```
 
+### Adding Additional Log Paths
+
+To monitor additional log directories beyond `/var/log`, edit the `volumes` section in `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./fail2ban/data:/data
+  - /var/log:/var/log:ro
+  # Add additional log paths here as needed:
+  # - /var/log/nginx:/var/log/nginx:ro
+  # - /opt/app/logs:/var/log/app:ro
+  # - /home/user/custom_logs:/var/log/custom:ro
+  # - /var/lib/docker/containers:/var/log/docker:ro
+  ${NGINX_LOGS_PATH:-../nginx/logs}:/logs/nginx:ro
+```
+
+**Common Log Sources:**
+- **Nginx**: `/var/log/nginx:/var/log/nginx:ro`
+- **Application Logs**: `/opt/app/logs:/var/log/app:ro`
+- **Docker Logs**: `/var/lib/docker/containers:/var/log/docker:ro`
+- **Custom Logs**: `/home/user/custom_logs:/var/log/custom:ro`
+
+**Format**: `/host/path:/container/path:permissions`
+- `host/path`: Path on your host machine
+- `container/path`: Mount point inside fail2ban container
+- `permissions`: `ro` (read-only) or `rw` (read-write)
+
+After adding new log paths, restart fail2ban:
+```bash
+docker compose restart fail2ban
+```
 
 2. Build and run the Docker containers:
    

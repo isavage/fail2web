@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fail2Web Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>Fail2Web Dashboard</h1>
+            <button id="logout-btn" class="logout-button">Logout</button>
+        </div>
+    </header>
+    <div class="container">
+        <main>
+            <section id="jails-section">
+                <div class="section-header">
+                    <h2>Active Jails</h2>
+                    <button onclick="showJailConfig()" class="config-button">Manage Jails</button>
+                </div>
+                <div id="jails-list"></div>
+            </section>
+            
+            <section id="jail-config-section" style="display: none;">
+                <div class="section-header">
+                    <h2>Jail Configuration</h2>
+                    <button onclick="hideJailConfig()" class="close-button">×</button>
+                </div>
+                <div class="jail-config-container">
+                    <div class="jail-form">
+                        <h3>Create/Edit Jail</h3>
+                        <div class="template-section">
+                            <label for="jail-template">Start from Template:</label>
+                            <select id="jail-template" onchange="loadTemplate()">
+                                <option value="">-- Custom Configuration --</option>
+                            </select>
+                            <button type="button" onclick="loadTemplates()" class="refresh-button">Refresh Templates</button>
+                        </div>
+                        <form id="jail-form">
+                            <div class="form-group">
+                                <label for="jail-name">Jail Name:</label>
+                                <input type="text" id="jail-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="jail-filter">Filter:</label>
+                                <select id="jail-filter" required>
+                                    <option value="">Select a filter...</option>
+                                    <option value="sshd">SSH (sshd)</option>
+                                    <option value="nginx">Nginx (nginx)</option>
+                                    <option value="sshd2">SSH Enhanced (sshd2)</option>
+                                    <option value="apache-auth">Apache Auth (apache-auth)</option>
+                                    <option value="apache-badbots">Apache Bad Bots (apache-badbots)</option>
+                                    <option value="apache-botsearch">Apache Bot Search (apache-botsearch)</option>
+                                    <option value="apache-common">Apache Common (apache-common)</option>
+                                    <option value="apache-fakegooglebot">Apache Fake Googlebot (apache-fakegooglebot)</option>
+                                    <option value="apache-modsecurity">Apache ModSecurity (apache-modsecurity)</option>
+                                    <option value="apache-nohome">Apache No Home (apache-nohome)</option>
+                                    <option value="apache-noscript">Apache No Script (apache-noscript)</option>
+                                    <option value="apache-overflows">Apache Overflows (apache-overflows)</option>
+                                    <option value="apache-pass">Apache Pass (apache-pass)</option>
+                                    <option value="apache-shellshock">Apache Shellshock (apache-shellshock)</option>
+                                    <option value="vsftpd">VSFTPD (vsftpd)</option>
+                                    <option value="proftpd">ProFTPD (proftpd)</option>
+                                    <option value="pure-ftpd">Pure-FTPd (pure-ftpd)</option>
+                                    <option value="wuftpd">WU-FTPd (wuftpd)</option>
+                                    <option value="postfix">Postfix (postfix)</option>
+                                    <option value="sendmail-auth">Sendmail Auth (sendmail-auth)</option>
+                                    <option value="sendmail-reject">Sendmail Reject (sendmail-reject)</option>
+                                    <option value="exim">Exim (exim)</option>
+                                    <option value="dovecot">Dovecot (dovecot)</option>
+                                    <option value="sieve">Sieve (sieve)</option>
+                                    <option value="solid-pop3d">Solid POP3d (solid-pop3d)</option>
+                                    <option value="courier-auth">Courier Auth (courier-auth)</option>
+                                    <option value="courier-smtp">Courier SMTP (courier-smtp)</option>
+                                    <option value="named">BIND9 (named)</option>
+                                    <option value="recidive">Recidive (recidive)</option>
+                                    <option value="murmur">Mumble (murmur)</option>
+                                    <option value="asterisk">Asterisk (asterisk)</option>
+                                    <option value="freeswitch">FreeSWITCH (freeswitch)</option>
+                                    <option value="mysqld">MySQL (mysqld)</option>
+                                    <option value="mysqld-auth">MySQL Auth (mysqld-auth)</option>
+                                    <option value="oracle">Oracle (oracle)</option>
+                                    <option value="php-url-fopen">PHP URL Fopen (php-url-fopen)</option>
+                                    <option value="roundcube-auth">Roundcube Auth (roundcube-auth)</option>
+                                    <option value="openwebmail">OpenWebMail (openwebmail)</option>
+                                    <option value="horde">Horde (horde)</option>
+                                    <option value="groupoffice">GroupOffice (groupoffice)</option>
+                                    <option value="sogo">SOGo (sogo)</option>
+                                    <option value="tomcat">Tomcat (tomcat)</option>
+                                    <option value="monit">Monit (monit)</option>
+                                    <option value="webmin">Webmin (webmin)</option>
+                                    <option value="drupal-auth">Drupal Auth (drupal-auth)</option>
+                                    <option value="magento">Magento (magento)</option>
+                                    <option value="wordpress">WordPress (wordpress)</option>
+                                    <option value="phpmyadmin">phpMyAdmin (phpmyadmin)</option>
+                                    <option value="guacamole">Guacamole (guacamole)</option>
+                                    <option value="slapd">OpenLDAP (slapd)</option>
+                                    <option value="directadmin">DirectAdmin (directadmin)</option>
+                                    <option value="iptables">iptables (iptables)</option>
+                                    <option value="nginx-http-auth">Nginx HTTP Auth (nginx-http-auth)</option>
+                                    <option value="nginx-limit-req">Nginx Limit Requests (nginx-limit-req)</option>
+                                    <option value="nginx-botsearch">Nginx Bot Search (nginx-botsearch)</option>
+                                    <option value="custom">Custom (specify below)</option>
+                                </select>
+                                <input type="text" id="jail-filter-custom" placeholder="Enter custom filter name" style="display: none; margin-top: 0.5rem;">
+                            </div>
+                            <div class="form-group">
+                                <label for="jail-logpath">Log Path:</label>
+                                <input type="text" id="jail-logpath" placeholder="e.g., /var/log/auth.log" required>
+                                <small class="form-hint">Note: This path must be accessible inside the fail2ban container. Ensure the corresponding host path is mounted in docker-compose.yml volumes.</small>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="jail-maxretry">Max Retry:</label>
+                                    <input type="number" id="jail-maxretry" value="3" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="jail-findtime">Find Time (s):</label>
+                                    <input type="number" id="jail-findtime" value="3600" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="jail-bantime">Ban Time (s):</label>
+                                    <input type="number" id="jail-bantime" value="600" min="1">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="jail-action">Action:</label>
+                                <input type="text" id="jail-action" placeholder="e.g., %(action_mw)s">
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="jail-enabled" checked>
+                                    Enabled
+                                </label>
+                            </div>
+                            <div class="form-buttons">
+                                <button type="submit" class="save-button">Save Jail</button>
+                                <button type="button" onclick="clearJailForm()" class="clear-button">Clear</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="ignoreip-management">
+                        <h3>Ignore IP Management</h3>
+                        <p>Add IP addresses or CIDR ranges that should never be banned:</p>
+                        <div class="ignoreip-form">
+                            <div class="form-group">
+                                <label for="new-ignoreip">Add IP/CIDR:</label>
+                                <div class="ip-input-group">
+                                    <input type="text" id="new-ignoreip" placeholder="e.g., 192.168.1.100 or 10.0.0.0/8">
+                                    <button type="button" onclick="addIgnoreIP()" class="add-button">Add</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ignoreip-list" id="ignoreip-list">
+                            <!-- Current ignoreIP list will be populated here -->
+                        </div>
+                        <div class="form-buttons">
+                            <button type="button" onclick="saveIgnoreIP()" class="save-button">Save Changes</button>
+                            <button type="button" onclick="loadIgnoreIP()" class="refresh-button">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="jail-list">
+                    <h3>Existing Jails</h3>
+                    <div id="jail-config-list">
+                        <!-- Jail configurations will be populated here -->
+                    </div>
+                </div>
+            </section>
+            
+            <section id="banned-ips-section">
+                <div class="section-header">
+                    <h2>Banned IPs</h2>
+                    <div class="search-container">
+                        <input type="text" 
+                               id="ip-search" 
+                               placeholder="Search IPs..."
+                               onkeyup="filterIPs()"
+                               class="ip-search-input">
+                        <input type="text" 
+                               id="ip-to-ban" 
+                               placeholder="Add IP or CIDR (e.g. 10.1.2.0/24)"
+                               class="ip-input">
+                        <button onclick="banIP()" class="ban-button">Ban</button>
+                    </div>
+                </div>
+                <div id="banned-ips"></div>
+            </section>
+        </main>
+    </div>
+    <script src="js/main.js"></script>
+    <footer class="copyright-footer">
+        <p>&copy; 2025 VRS. All rights reserved.</p>
+    </footer>
+</body>
+</html>
