@@ -289,9 +289,17 @@ def create_jail_config():
         # Validate log path exists (with more lenient check)
         logpath = data['logpath']
         logger.info(f"Checking log path: {logpath}")
+        logger.info(f"Current user: {os.getuid()}")
+        logger.info(f"File exists: {os.path.exists(logpath)}")
+        logger.info(f"File readable: {os.access(logpath, os.R_OK) if os.path.exists(logpath) else 'N/A'}")
         
         if not os.path.exists(logpath):
             logger.warning(f"Log file not found: {logpath}")
+            # Check if there are any SSH log files in /var/log
+            var_log_files = []
+            if os.path.exists('/var/log'):
+                var_log_files = [f for f in os.listdir('/var/log') if 'auth' in f or 'ssh' in f or 'secure' in f]
+            logger.info(f"Available log files in /var/log: {var_log_files}")
             # Don't fail the request, just warn and continue
             # return jsonify({
             #     'error': f'Log file not found: {logpath}',
@@ -324,17 +332,31 @@ def create_jail_config():
         with open(jail_filepath, 'w') as f:
             config.write(f)
         
-        # Reload fail2ban to apply changes
+        # Wait a moment for file to be fully written
+        import time
+        time.sleep(0.5)
+        
+        # Reload fail2ban to apply changes - try different reload methods
+        logger.info("Attempting to reload fail2ban configuration...")
+        
+        # Method 1: Standard reload
         reload_response = fail2ban_command('reload')
+        logger.info(f"Standard reload response: {reload_response}")
+        
+        # Method 2: If standard reload doesn't work, try reload with specific jail
+        if 'sshd2' not in str(reload_response):
+            logger.info("Trying jail-specific reload...")
+            jail_reload_response = fail2ban_command(f'reload {jail_name}')
+            logger.info(f"Jail-specific reload response: {jail_reload_response}")
         
         # Wait a moment for fail2ban to process the reload
-        import time
         time.sleep(1)
         
         # Also try to start the jail specifically if it's enabled
         if data.get('enabled', True):
+            logger.info(f"Attempting to start jail {jail_name}...")
             start_response = fail2ban_command(f'start {jail_name}')
-            logger.info(f"Started jail {jail_name}: {start_response}")
+            logger.info(f"Start jail response: {start_response}")
             
             # Check if jail actually started by getting status
             status_response = fail2ban_command('status')
