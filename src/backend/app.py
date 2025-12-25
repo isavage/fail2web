@@ -526,8 +526,9 @@ def get_ignoreip():
     try:
         ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
         
+        # If file doesn't exist, return empty list (not 404)
         if not ignoreip_file.exists():
-            return jsonify({'error': 'IgnoreIP configuration not found'}), 404
+            return jsonify({'ignoreip': []})
         
         config = configparser.ConfigParser(interpolation=None)
         config.read(ignoreip_file)
