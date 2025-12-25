@@ -5,7 +5,7 @@ import subprocess
 import logging
 from functools import wraps
 import jwt
-import datetime
+from datetime import timedelta, datetime
 import json
 import configparser
 from pathlib import Path
@@ -125,8 +125,8 @@ def login():
     if username == USERNAME and password == PASSWORD:
         token = jwt.encode({
             'user': username,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)  # Increased to 5 minutes
-        }, SECRET_KEY, algorithm='HS256')
+            'exp': datetime.utcnow() + timedelta(minutes=5)  # Increased to 5 minutes
+        }, app.config['JWT_SECRET_KEY'], algorithm='HS256')
         
         response = jsonify({
             'token': token,
