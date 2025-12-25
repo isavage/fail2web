@@ -44,9 +44,25 @@ def token_required(f):
             logger.warning("No Authorization header found")
             return jsonify({'error': 'Token is missing'}), 401
         
-        # Extract token from "Bearer <token>" format
-        token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
+        # Extract token from "Bearer <token>" format or handle direct token
+        try:
+            if auth_header.startswith('Bearer '):
+                token = auth_header[7:]  # Remove 'Bearer ' prefix
+            elif ' ' in auth_header:
+                # Handle other "scheme token" formats
+                token = auth_header.split(' ')[1]
+            else:
+                # Direct token without prefix
+                token = auth_header
+        except Exception as e:
+            logger.error(f"Error extracting token: {str(e)}")
+            return jsonify({'error': 'Invalid token format'}), 401
+        
         logger.debug(f"Extracted token: {token[:20]}..." if len(token) > 20 else f"Extracted token: {token}")
+        
+        if not token:
+            logger.warning("Empty token extracted")
+            return jsonify({'error': 'Token is empty'}), 401
         
         try:
             decoded = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
@@ -122,17 +138,23 @@ def login():
         username = data.get('username')
         password = data.get('password')
         
+        logger.debug(f"Login attempt for user: {username}")
+        
         if username == USERNAME and password == PASSWORD:
             token = jwt.encode({
                 'sub': username,
                 'exp': datetime.utcnow() + app.config['JWT_ACCESS_TOKEN_EXPIRES']
             }, app.config['JWT_SECRET_KEY'])
             
+            logger.debug(f"Generated token: {token[:20]}..." if len(token) > 20 else f"Generated token: {token}")
+            logger.debug(f"JWT Secret Key: {app.config['JWT_SECRET_KEY'][:10]}...")
+            
             return jsonify({
                 'token': token,
                 'expires_in': '24 hours'
             })
         else:
+            logger.warning(f"Invalid credentials for user: {username}")
             return jsonify({'error': 'Invalid credentials'}), 401
             
     except Exception as e:
