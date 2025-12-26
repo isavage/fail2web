@@ -128,6 +128,10 @@ jobs:
                   cp .env .env.backup
                 fi
                 
+                if [ -d fail2ban/data ]; then
+                  echo "🔒 Backing up fail2ban/data directory"
+                  rsync -a fail2ban/data/ fail2ban/data.backup/ 2>/dev/null || true
+                fi
               
                 # Clean up except backups - use rm -rf for better handling
                 # First, remove files and empty directories
@@ -149,6 +153,13 @@ jobs:
               if [ -f .env.backup ]; then
                 echo "🔒 Restoring .env file"
                 mv .env.backup .env
+              fi
+              
+              # Restore fail2ban/data from backup if cleanup was performed
+              if [ -d fail2ban/data.backup ]; then
+                echo "🔒 Restoring fail2ban/data directory"
+                rm -rf fail2ban/data 2>/dev/null || true
+                mv fail2ban/data.backup fail2ban/data
               fi
               
             fi
