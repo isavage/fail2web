@@ -177,7 +177,7 @@ def fail2ban_command(cmd):
 
 @app.route('/')
 def index():
-    return send_from_directory('static')
+    return send_from_directory('../frontend', 'index.html')
 
 @app.route('/api/login', methods=['POST'])
 def login():
