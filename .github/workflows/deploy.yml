@@ -127,6 +127,12 @@ jobs:
                   echo "🔒 Backing up .env file (credentials only)"
                   cp .env .env.backup
                 fi
+
+                # NEW: Explicitly remove the entire fail2ban/data directory for full reset
+                if [ -d fail2ban/data ]; then
+                  echo "🗑️ Removing persistent Fail2ban data (bans DB + custom jails/filters)"
+                  rm -rf fail2ban/data
+                fi
               
                 # Clean up ALL files including fail2ban/data
                 # First, remove all files except backups
