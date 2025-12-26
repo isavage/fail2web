@@ -39,7 +39,6 @@ services:
       - ./src/backend:/app/backend
       - ./src/frontend:/app/frontend
       - ./fail2ban/data/jail.d:/data/jail.d:rw  # Mount jail.d for configuration management
-      - ./templates:/data/templates:ro  # Mount templates directory
       - ./fail2ban/data:/data/fail2ban:rw  # Mount fail2ban data for direct access
       - fail2ban_data:/var/run/fail2ban  # Mount fail2ban socket directory
     environment:
