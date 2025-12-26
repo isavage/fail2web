@@ -120,31 +120,26 @@ jobs:
             else
               echo "🔧 Standard SCP deployment mode"
               
-              # Backup .env and fail2ban/data before cleanup (if requested)
+              # Backup .env before cleanup (if requested)
               if [[ "${{ github.event.inputs.cleanup }}" == "true" ]]; then
-                echo "🧹 Cleanup requested for prod deployment"
+                echo "🧹 Cleanup requested for prod deployment - removing ALL files including fail2ban data"
                 if [ -f .env ]; then
-                  echo "🔒 Backing up .env file"
+                  echo "🔒 Backing up .env file (credentials only)"
                   cp .env .env.backup
                 fi
-                
-                if [ -d fail2ban/data ]; then
-                  echo "🔒 Backing up fail2ban/data directory"
-                  rsync -a fail2ban/data/ fail2ban/data.backup/ 2>/dev/null || true
-                fi
               
-                # Clean up except backups - use rm -rf for better handling
-                # First, remove files and empty directories
-                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -type f -delete 2>/dev/null || true
+                # Clean up ALL files including fail2ban/data
+                # First, remove all files except backups
+                find . -mindepth 1 -not -path './*.backup' -type f -delete 2>/dev/null || true
                 # Then remove empty directories
-                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -type d -empty -delete 2>/dev/null || true
-                # Finally, force remove any remaining directories
-                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -type d -exec rm -rf {} + 2>/dev/null || true
+                find . -mindepth 1 -not -path './*.backup' -type d -empty -delete 2>/dev/null || true
+                # Finally, force remove any remaining directories (including fail2ban/data)
+                find . -mindepth 1 -not -path './*.backup' -type d -exec rm -rf {} + 2>/dev/null || true
               fi
               
               # Move files from temp to target (fast, atomic-ish)
               echo "🚚 Moving new files to $TARGET_DIR..."
-              rsync -av --no-perms --no-owner --no-group --exclude='.env' --exclude='fail2ban/data' "$TEMP_DIR"/. ./
+              rsync -av --no-perms --no-owner --no-group --exclude='.env' "$TEMP_DIR"/. ./
 
               # Clean up temp directory
               rm -rf "$TEMP_DIR"
@@ -153,13 +148,6 @@ jobs:
               if [ -f .env.backup ]; then
                 echo "🔒 Restoring .env file"
                 mv .env.backup .env
-              fi
-              
-              # Restore fail2ban/data from backup if cleanup was performed
-              if [ -d fail2ban/data.backup ]; then
-                echo "🔒 Restoring fail2ban/data directory"
-                rm -rf fail2ban/data 2>/dev/null || true
-                mv fail2ban/data.backup fail2ban/data
               fi
               
             fi
