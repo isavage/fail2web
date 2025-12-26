@@ -8,6 +8,7 @@ services:
     volumes:
       - ./fail2ban/data:/data
       - ./fail2ban/data/jail.d:/etc/fail2ban/jail.d:ro  # Mount jail configurations
+      - ./fail2ban/data/filter.d:/etc/fail2ban/filter.d/custom:ro  # Mount custom filters to custom subdirectory
       - /var/log:/var/log:ro
       # Add additional log paths here as needed:
       # - /var/log/nginx:/var/log/nginx:ro

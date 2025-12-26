@@ -327,33 +327,28 @@ def write_config_file(filepath, data):
     
     # Check if this is a custom filter
     # In fail2web container: custom filters are at /data/fail2ban/filter.d/
-    # In fail2ban container: custom filters are at /data/filter.d/
+    # In fail2ban container: custom filters are at /etc/fail2ban/filter.d/custom/ (mounted)
     # Standard filters are at /etc/fail2ban/filter.d/ in fail2ban container
     
     # Paths as seen from fail2web container
     custom_filter_path_in_web = Path('/data/fail2ban/filter.d') / f'{filter_name}.conf'
-    
-    # We need to check if it's a custom filter. Since we can't check /etc/fail2ban/filter.d/ from fail2web,
-    # we'll assume any filter that exists in /data/fail2ban/filter.d/ is a custom filter.
-    # Standard filters (sshd, nginx, etc.) won't exist there unless explicitly copied.
-    
-    # Determine the actual filter path to use in jail config
-    # The jail config will be read by fail2ban container, where paths are different
-    if custom_filter_path_in_web.exists():
-        # Custom filter - use path as seen from fail2ban container
-        # In fail2ban container: /data/filter.d/{filter}.conf
-        filter_value = f'/data/filter.d/{filter_name}.conf'
-    else:
-        # Standard filter - use just the name
-        # fail2ban will find it in /etc/fail2ban/filter.d/
-        filter_value = filter_name
     
     config = configparser.ConfigParser()
     config['DEFAULT']['include'] = '/data/jail.d/ignoreip.conf'
     
     config.add_section(jail_name)
     config.set(jail_name, 'enabled', str(data.get('enabled', True)).lower())
-    config.set(jail_name, 'filter', filter_value)
+    
+    # Determine filter reference
+    if custom_filter_path_in_web.exists():
+        # Custom filter - reference as custom/filter_name
+        # Filters are mounted at /etc/fail2ban/filter.d/custom/ in fail2ban container
+        config.set(jail_name, 'filter', f'custom/{filter_name}')
+    else:
+        # Standard filter - use just the name
+        # fail2ban will find it in /etc/fail2ban/filter.d/
+        config.set(jail_name, 'filter', filter_name)
+    
     config.set(jail_name, 'logpath', data['logpath'])
     config.set(jail_name, 'maxretry', str(data.get('maxretry', 3)))
     config.set(jail_name, 'findtime', str(data.get('findtime', 3600)))
