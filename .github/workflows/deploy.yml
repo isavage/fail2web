@@ -99,7 +99,10 @@ jobs:
               
               # Clean up target directory for fresh git clone
               echo "🧹 Cleaning up $TARGET_DIR for fresh git clone..."
-              find . -mindepth 1 -delete 2>/dev/null || true
+              # Remove all files and directories except . (current directory)
+              find . -mindepth 1 -type f -delete 2>/dev/null || true
+              find . -mindepth 1 -type d -empty -delete 2>/dev/null || true
+              find . -mindepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
               
               # Clone fresh repository
               echo "📦 Cloning repository..."
@@ -130,8 +133,13 @@ jobs:
                   rsync -a fail2ban/data/ fail2ban/data.backup/ 2>/dev/null || true
                 fi
                 
-                # Clean up except backups
-                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -delete
+                # Clean up except backups - use rm -rf for better handling
+                # First, remove files and empty directories
+                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -type f -delete 2>/dev/null || true
+                # Then remove empty directories
+                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -type d -empty -delete 2>/dev/null || true
+                # Finally, force remove any remaining directories
+                find . -mindepth 1 -not -path './.env*' -not -path './fail2ban/data*' -not -path './*.backup' -type d -exec rm -rf {} + 2>/dev/null || true
               fi
               
               # Move files from temp to target (fast, atomic-ish)
