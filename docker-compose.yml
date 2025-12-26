@@ -7,6 +7,7 @@ services:
     network_mode: host
     volumes:
       - ./fail2ban/data:/data
+      - ./fail2ban/data/jail.d:/etc/fail2ban/jail.d:ro  # Mount jail configurations
       - /var/log:/var/log:ro
       # Add additional log paths here as needed:
       # - /var/log/nginx:/var/log/nginx:ro
