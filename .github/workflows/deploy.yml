@@ -42,8 +42,8 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           source: ".,!.git*,!.github*,!.gitignore,.env"
-          target: "/tmp/fail2web-deploy-temp/"
-          strip_components: 1
+          target: "/tmp/fail2web-deploy-temp"
+          strip_components: 0
           overwrite: true
 
       - name: Cleanup (if needed), move files, and finalize deployment
