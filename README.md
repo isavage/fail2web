@@ -1,4 +1,4 @@
-# fail2web - Complete Fail2ban Management Solution
+# fail2web - Fail2ban with Web UI
 fail2web is a comprehensive Docker-based solution that includes both the fail2ban intrusion prevention system and a modern web management interface. This all-in-one package provides complete fail2ban functionality with an elegant, user-friendly web application for managing jails, banned IPs, and configurations.
 
 ## 🎯 What's Included
