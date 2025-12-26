@@ -73,21 +73,15 @@ jobs:
             CURRENT_BRANCH="${CURRENT_BRANCH#refs/heads/}"
 
             # Stop any running containers from the OTHER directory first
-            # (to avoid port conflicts when switching between prod/dev)
-            if [[ "$USE_GIT" == "true" ]]; then
-              # Dev mode: stop prod containers if running
-              PROD_DIR="/docker/fail2web"
-              if [ -d "$PROD_DIR" ] && [ -f "$PROD_DIR/docker-compose.yml" ]; then
+            PROD_DIR="/docker/fail2web"
+            if [ -d "$PROD_DIR" ] && [ -f "$PROD_DIR/docker-compose.yml" ]; then
                 echo "🛑 Stopping prod containers in $PROD_DIR..."
                 cd "$PROD_DIR" && docker compose down 2>/dev/null || true
-              fi
-            else
-              # Prod mode: stop dev containers if running
-              DEV_DIR="/docker/fail2web_dev"
-              if [ -d "$DEV_DIR" ] && [ -f "$DEV_DIR/docker-compose.yml" ]; then
+            fi
+            DEV_DIR="/docker/fail2web_dev"
+            if [ -d "$DEV_DIR" ] && [ -f "$DEV_DIR/docker-compose.yml" ]; then
                 echo "🛑 Stopping dev containers in $DEV_DIR..."
                 cd "$DEV_DIR" && docker compose down 2>/dev/null || true
-              fi
             fi
 
             # Ensure target exists
