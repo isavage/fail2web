@@ -97,6 +97,12 @@ jobs:
               find . -mindepth 1 -type f -delete 2>/dev/null || true
               find . -mindepth 1 -type d -empty -delete 2>/dev/null || true
               find . -mindepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
+
+              # NEW: Explicitly remove the entire fail2ban/data directory for full reset
+              if [ -d fail2ban/data ]; then
+                  echo "🗑️ Removing persistent Fail2ban data (bans DB + custom jails/filters)"
+                  sudo rm -rf fail2ban/data
+              fi
               
               # Clone fresh repository
               echo "📦 Cloning repository..."
@@ -125,7 +131,7 @@ jobs:
                 # NEW: Explicitly remove the entire fail2ban/data directory for full reset
                 if [ -d fail2ban/data ]; then
                   echo "🗑️ Removing persistent Fail2ban data (bans DB + custom jails/filters)"
-                  rm -rf fail2ban/data
+                  sudo rm -rf fail2ban/data
                 fi
               
                 # Clean up ALL files including fail2ban/data
