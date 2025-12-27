@@ -109,7 +109,6 @@ volumes:
   # - /opt/app/logs:/var/log/app:ro
   # - /home/user/custom_logs:/var/log/custom:ro
   # - /var/lib/docker/containers:/var/log/docker:ro
-  ${NGINX_LOGS_PATH:-../nginx/logs}:/logs/nginx:ro
 ```
 
 **Common Log Sources:**
