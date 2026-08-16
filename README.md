@@ -123,6 +123,13 @@ volumes:
 - `permissions`: `ro` (read-only) or `rw` (read-write)
 
 ### **5. Start the Application**
+
+For GitHub Actions VPS deployments, runtime variables are loaded from Doppler. Add
+`DOPPLER_TOKEN` as a secret in each GitHub environment used by `deploy.yml` (for
+example, `prod-IN` and `prod-NL`). The deployment injects the Doppler config at
+runtime without creating a `.env` on the VPS; the local `.env` workflow above
+remains the fallback for local development.
+
 ```bash
 # Build and start the containers
 docker compose up -d

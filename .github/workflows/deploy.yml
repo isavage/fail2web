@@ -41,7 +41,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: ".,!.git*,!.github*,!.gitignore,.env"
+          source: ".,!.git*,!.github*,!.gitignore,!.env"
           target: "/tmp/fail2web-deploy-temp"
           strip_components: 0
           overwrite: true
@@ -53,8 +53,16 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
+          envs: DOPPLER_TOKEN
+          env:
+            DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           script: |
             set -e
+
+            if [ -z "${DOPPLER_TOKEN:-}" ]; then
+              echo "❌ DOPPLER_TOKEN is not configured for this GitHub environment"
+              exit 1
+            fi
 
             # Determine target directory based on deployment mode
             USE_GIT="${{ github.event.inputs.use_git_deployment }}"
@@ -76,12 +84,12 @@ jobs:
             PROD_DIR="/docker/fail2web"
             if [ -d "$PROD_DIR" ] && [ -f "$PROD_DIR/docker-compose.yml" ]; then
                 echo "🛑 Stopping prod containers in $PROD_DIR..."
-                cd "$PROD_DIR" && docker compose down 2>/dev/null || true
+                cd "$PROD_DIR" && doppler run -- docker compose down 2>/dev/null || true
             fi
             DEV_DIR="/docker/fail2web_dev"
             if [ -d "$DEV_DIR" ] && [ -f "$DEV_DIR/docker-compose.yml" ]; then
                 echo "🛑 Stopping dev containers in $DEV_DIR..."
-                cd "$DEV_DIR" && docker compose down 2>/dev/null || true
+                cd "$DEV_DIR" && doppler run -- docker compose down 2>/dev/null || true
             fi
 
             # Ensure target exists
@@ -108,26 +116,12 @@ jobs:
               echo "📦 Cloning repository..."
               git clone --branch "$CURRENT_BRANCH" "$REPO_URL" .
               
-              # Copy .env from prod if it doesn't exist
-              PROD_ENV="/docker/fail2web/.env"
-              if [ ! -f .env ] && [ -f "$PROD_ENV" ]; then
-                echo "🔒 Copying .env from prod directory"
-                cp "$PROD_ENV" .env
-              elif [ ! -f .env ]; then
-                echo "❌ .env file missing! Create one manually or copy from prod."
-                exit 1
-              fi
             else
               echo "🔧 Standard SCP deployment mode"
               
               # Backup .env before cleanup (if requested)
               if [[ "${{ github.event.inputs.cleanup }}" == "true" ]]; then
                 echo "🧹 Cleanup requested for prod deployment - removing ALL files including fail2ban data"
-                if [ -f .env ]; then
-                  echo "🔒 Backing up .env file (credentials only)"
-                  cp .env .env.backup
-                fi
-
                 # NEW: Explicitly remove the entire fail2ban/data directory for full reset
                 if [ -d fail2ban/data ]; then
                   echo "🗑️ Removing persistent Fail2ban data (bans DB + custom jails/filters)"
@@ -150,48 +144,44 @@ jobs:
               # Clean up temp directory
               rm -rf "$TEMP_DIR"
               
-              # Restore .env from backup if cleanup was performed
-              if [ -f .env.backup ]; then
-                echo "🔒 Restoring .env file"
-                mv .env.backup .env
-              fi
-              
             fi
+
+            # Runtime configuration comes from Doppler. Never persist it on the VPS.
+            if ! command -v doppler >/dev/null 2>&1; then
+              echo "📦 Installing Doppler CLI..."
+              curl -Ls https://cli.doppler.com/install.sh | sudo sh
+            fi
+            rm -f .env .env.backup .env.doppler
 
             # Set permissions
             chmod -R 750 . 2>/dev/null || true
-            [ -f .env ] && chmod 640 .env
 
             # Validate
-            if [ ! -f .env ]; then
-              echo "❌ .env file missing!"
-              exit 1
-            fi
-
             if [ ! -f docker-compose.yml ]; then
               echo "❌ docker-compose.yml missing!"
               exit 1
             fi
 
-            # Validate required environment variables
-            for var in FAIL2WEB_USERNAME FAIL2WEB_PASSWORD FAIL2WEB_SECRET_KEY TZ; do
-              grep -q "^$var=" .env || { echo "❌ Missing $var in .env"; exit 1; }
-            done
-            echo "✅ .env validated"
+            # Validate required variables without writing them to disk.
+            doppler run -- sh -c 'for var in FAIL2WEB_USERNAME FAIL2WEB_PASSWORD FAIL2WEB_SECRET_KEY TZ EXTRA_HOST; do
+              eval "value=\${$var:-}"
+              [ -n "$value" ] || { echo "❌ Missing $var in Doppler configuration"; exit 1; }
+            done'
+            echo "✅ Doppler configuration validated"
 
             # Restart services
             echo "🚀 Restarting services..."
-            docker compose down || true
-            docker compose up -d --build
+            doppler run -- docker compose down || true
+            doppler run -- docker compose up -d --build
 
             # Wait for services to start
             echo "⏳ Waiting for services to start..."
             sleep 10
 
             # Verify services are running
-            if ! docker compose ps | grep -q "Up"; then
+            if ! doppler run -- docker compose ps | grep -q "Up"; then
               echo "❌ Services failed to start!"
-              docker compose logs
+              doppler run -- docker compose logs
               exit 1
             fi
             echo "✅ Services running"
