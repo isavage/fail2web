@@ -155,7 +155,9 @@ jobs:
             rm -f .env .env.backup .env.doppler
 
             # Import Doppler variables into this shell only; never persist them.
+            set -a
             eval "$(doppler secrets download --no-file --format env)"
+            set +a
 
             # Set permissions
             chmod -R 750 . 2>/dev/null || true
