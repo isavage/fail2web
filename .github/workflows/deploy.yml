@@ -154,6 +154,9 @@ jobs:
             fi
             rm -f .env .env.backup .env.doppler
 
+            # Import Doppler variables into this shell only; never persist them.
+            eval "$(doppler secrets download --no-file --format env)"
+
             # Set permissions
             chmod -R 750 . 2>/dev/null || true
 
@@ -164,25 +167,25 @@ jobs:
             fi
 
             # Validate required variables without writing them to disk.
-            doppler run -- sh -c 'for var in FAIL2WEB_USERNAME FAIL2WEB_PASSWORD FAIL2WEB_SECRET_KEY EXTRA_HOST; do
+            for var in FAIL2WEB_USERNAME FAIL2WEB_PASSWORD FAIL2WEB_SECRET_KEY EXTRA_HOST; do
               eval "value=\${$var:-}"
               [ -n "$value" ] || { echo "❌ Missing $var in Doppler configuration"; exit 1; }
-            done'
+            done
             echo "✅ Doppler configuration validated"
 
             # Restart services
             echo "🚀 Restarting services..."
-            doppler run -- docker compose down || true
-            doppler run -- docker compose up -d --build
+            docker compose down || true
+            docker compose up -d --build
 
             # Wait for services to start
             echo "⏳ Waiting for services to start..."
             sleep 10
 
             # Verify services are running
-            if ! doppler run -- docker compose ps | grep -q "Up"; then
+            if ! docker compose ps | grep -q "Up"; then
               echo "❌ Services failed to start!"
-              doppler run -- docker compose logs
+              docker compose logs
               exit 1
             fi
             echo "✅ Services running"
