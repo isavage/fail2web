@@ -54,8 +54,6 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           envs: DOPPLER_TOKEN
-          env:
-            DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           script: |
             set -e
 
@@ -195,3 +193,5 @@ jobs:
             else
               echo "🎉 Prod deployment completed successfully in $TARGET_DIR!"
             fi
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
