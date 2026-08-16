@@ -42,7 +42,7 @@ services:
       - FAIL2WEB_USERNAME=${FAIL2WEB_USERNAME}
       - FAIL2WEB_PASSWORD=${FAIL2WEB_PASSWORD}
       - FAIL2WEB_SECRET_KEY=${FAIL2WEB_SECRET_KEY}
-      - TZ=${TZ}
+      - TZ=${TZ:-America/New_York}
     restart: unless-stopped
     depends_on:
       - fail2ban

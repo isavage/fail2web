@@ -164,7 +164,7 @@ jobs:
             fi
 
             # Validate required variables without writing them to disk.
-            doppler run -- sh -c 'for var in FAIL2WEB_USERNAME FAIL2WEB_PASSWORD FAIL2WEB_SECRET_KEY TZ EXTRA_HOST; do
+            doppler run -- sh -c 'for var in FAIL2WEB_USERNAME FAIL2WEB_PASSWORD FAIL2WEB_SECRET_KEY EXTRA_HOST; do
               eval "value=\${$var:-}"
               [ -n "$value" ] || { echo "❌ Missing $var in Doppler configuration"; exit 1; }
             done'
