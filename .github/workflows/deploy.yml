@@ -1,6 +1,9 @@
 name: Deploy to VPS
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       environment:
@@ -26,7 +29,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment }}
+    environment: ${{ github.event.inputs.environment || 'prod-IN' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
