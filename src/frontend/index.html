@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fail2Web Dashboard</title>
+    <style>html.auth-pending body{visibility:hidden}html.auth-pending body.auth-ready{visibility:visible}</style>
+    <script>document.documentElement.classList.add('auth-pending');(function(){try{var t=localStorage.getItem('token');if(!t){var m=document.cookie.match(/(?:^|;\s*)token=([^;]*)/);if(m)t=decodeURIComponent(m[1]);}if(!t)location.replace('/login.html');}catch(e){}})();</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
