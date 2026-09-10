@@ -1150,6 +1150,9 @@ function fetchJails() {
             table.className = 'jails-table';
             const tbody = document.createElement('tbody');
             
+            // Capture selection BEFORE rebuilding DOM — innerHTML wipe destroys checked state
+            const selectedJail = document.querySelector('input[name="jail-selection"]:checked')?.value;
+            
             // Calculate number of columns based on window width
             const windowWidth = window.innerWidth;
             const columns = windowWidth > 1200 ? 4 : windowWidth > 768 ? 3 : windowWidth > 480 ? 2 : 1;
@@ -1181,15 +1184,14 @@ function fetchJails() {
             jailsList.innerHTML = '';
             jailsList.appendChild(table);
             
-            // Select the first jail by default
-            if (data.jails.length > 0) {
-                const firstJail = data.jails[0];
-                const firstRadio = document.getElementById(`jail-${firstJail}`);
-                if (firstRadio) {
-                    firstRadio.checked = true;
-                    firstRadio.closest('.jail-cell').classList.add('active');
-                    // Fetch jail details for the first jail
-                    fetchJailDetails(firstJail);
+            // Preserve user selection across 30s refreshes — only default to first jail on initial load
+            const jailToSelect = (selectedJail && data.jails.includes(selectedJail)) ? selectedJail : data.jails[0];
+            if (jailToSelect) {
+                const radio = document.getElementById(`jail-${jailToSelect}`);
+                if (radio) {
+                    radio.checked = true;
+                    radio.closest('.jail-cell').classList.add('active');
+                    fetchJailDetails(jailToSelect);
                 }
             }
         })
