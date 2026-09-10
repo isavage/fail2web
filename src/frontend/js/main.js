@@ -1072,25 +1072,20 @@ function authenticatedFetch(url, options = {}) {
         });
 }
 
-// Check authentication on page load
+// Check authentication on page load — reveal only after check (pairs with auth-pending gate in index.html)
 document.addEventListener('DOMContentLoaded', function() {
     const token = getToken();
-    if (!token) {
-        window.location.replace('/login.html');
-        return;
-    }
-    
-    // Try to verify token, but don't force logout if it fails
-    // Some servers might have issues with token verification endpoint
+    const reveal = () => { document.documentElement.classList.remove('auth-pending'); document.body.classList.add('auth-ready'); };
+    const goLogin = () => window.location.replace('/login.html');
+    if (!token) { goLogin(); return; }
+
     fetch('/api/verify-token', {
-        headers: {
-            'Authorization': 'Bearer ' + token
-        }
+        headers: { 'Authorization': 'Bearer ' + token }
     })
     .then(response => {
         if (response.status === 401) {
-            // Token verification failed, but don't logout immediately
-            // The token might still work for actual API calls
+            localStorage.removeItem('token');
+            goLogin();
             return Promise.reject(new Error('Token verification failed'));
         }
         if (!response.ok) {
@@ -1098,12 +1093,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return response.json();
     })
-    .then(data => {
-        // Token is valid, continue
-    })
+    .then(data => { reveal(); })
     .catch(error => {
-        // Don't logout on token verification failure
-        // Let actual API calls determine if token is valid
+        if (error.message === 'Token verification failed') return;
+        // Network/server error: still reveal — let subsequent API calls decide, don't strand on blank screen
+        reveal();
     });
 });
 
