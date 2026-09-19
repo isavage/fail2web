@@ -1,5 +1,7 @@
 // main.js
 
+const SESSION_TIMEOUT = 120000; // 2 minutes in milliseconds
+
 // Initialize the frontend application
 document.addEventListener("DOMContentLoaded", () => {
     // Set up event listeners and render components
@@ -1299,7 +1301,7 @@ function resetInactivityTimer() {
     inactivityTimer = setTimeout(() => {
         localStorage.removeItem('token');
         window.location.href = '/login.html';
-    }, 60000); // 1 minute timeout
+    }, SESSION_TIMEOUT); // 2 minutes
 }
 
 // Reset timer on activity

@@ -1,5 +1,4 @@
-const SESSION_TIMEOUT = 60000; // 1 minute in milliseconds
-let sessionTimer;
+const SESSION_TIMEOUT = 120000; // 2 minutes in milliseconds
 
 function handleLogin(event) {
     event.preventDefault();
@@ -35,7 +34,7 @@ function handleLogin(event) {
     return false;
 }
 
-// Auto logout after 1 minute of inactivity
+// Auto logout after 2 minutes of inactivity
 let inactivityTimer;
 
 function resetInactivityTimer() {
@@ -43,7 +42,7 @@ function resetInactivityTimer() {
     inactivityTimer = setTimeout(() => {
         localStorage.removeItem('token');
         window.location.href = '/login.html';
-    }, 60000); // 1 minute
+    }, SESSION_TIMEOUT);
 }
 
 // Reset timer on user activity
