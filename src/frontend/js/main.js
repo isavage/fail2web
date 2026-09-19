@@ -87,56 +87,63 @@ function setFilterDefaults(filterValue) {
             logpath: '%(syslog_authpriv)s',
             maxretry: 3,
             findtime: 3600,
-            bantime: 600
+            bantime: 60000
         },
         'sshd2': {
             name: 'sshd2',
             logpath: '%(syslog_authpriv)s',
             maxretry: 3,
             findtime: 1800,
-            bantime: 3600
+            bantime: 60000
         },
         'nginx': {
             name: 'nginx',
             logpath: '/var/log/nginx/access.log',
             maxretry: 5,
             findtime: 600,
-            bantime: 3600
+            bantime: 60000
+        },
+        'auth': {
+            name: 'auth',
+            logpath: '/var/log/nginx/access.log',
+            maxretry: 5,
+            findtime: 600,
+            bantime: 60000
         },
         'apache-auth': {
             name: 'apache-auth',
             logpath: '/var/log/apache2/error.log',
             maxretry: 3,
             findtime: 600,
-            bantime: 1200
+            bantime: 60000
         },
         'postfix': {
             name: 'postfix',
             logpath: '/var/log/mail.log',
             maxretry: 5,
             findtime: 600,
-            bantime: 1800
+            bantime: 180000
         },
         'dovecot': {
             name: 'dovecot',
             logpath: '/var/log/dovecot.log',
             maxretry: 5,
             findtime: 300,
-            bantime: 900
+            bantime: 90000
         },
         'vsftpd': {
             name: 'vsftpd',
             logpath: '/var/log/vsftpd.log',
             maxretry: 3,
             findtime: 600,
-            bantime: 1800
+            bantime: 180000
         },
         'mysqld': {
             name: 'mysqld',
             logpath: '/var/log/mysql/error.log',
             maxretry: 3,
             findtime: 600,
-            bantime: 1200
+            bantime: 120000
         }
     };
     
@@ -145,7 +152,7 @@ function setFilterDefaults(filterValue) {
         logpath: '/var/log/' + filterValue + '.log',
         maxretry: 3,
         findtime: 3600,
-        bantime: 600
+        bantime: 60000
     };
     
     jailName.value = defaults.name;
@@ -163,7 +170,7 @@ function setFilterDefaults(filterValue) {
 function resetToDefaults() {
     document.getElementById('jail-maxretry').value = 3;
     document.getElementById('jail-findtime').value = 3600;
-    document.getElementById('jail-bantime').value = 600;
+    document.getElementById('jail-bantime').value = 60000;
     document.getElementById('jail-action').value = '';
     document.getElementById('jail-enabled').checked = true;
 }
@@ -210,8 +217,9 @@ function populateFilterOptions() {
     // Common filter options
     const filters = [
         { value: 'sshd', text: 'SSH (sshd)' },
-        { value: 'nginx', text: 'Nginx (nginx)' },
         { value: 'sshd2', text: 'SSH Enhanced (sshd2)' },
+        { value: 'nginx', text: 'Nginx (nginx)' },
+        { value: 'nginx', text: 'Nginx Auth (auth)' },
         { value: 'apache-auth', text: 'Apache Auth (apache-auth)' },
         { value: 'apache-badbots', text: 'Apache Bad Bots (apache-badbots)' },
         { value: 'apache-botsearch', text: 'Apache Bot Search (apache-botsearch)' },
