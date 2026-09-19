@@ -221,7 +221,7 @@ function populateFilterOptions() {
         { value: 'sshd', text: 'SSH (sshd)' },
         { value: 'sshd2', text: 'SSH Enhanced (sshd2)' },
         { value: 'nginx', text: 'Nginx (nginx)' },
-        { value: 'nginx', text: 'Nginx Auth (auth)' },
+        { value: 'auth', text: 'Nginx Auth (auth)' },
         { value: 'apache-auth', text: 'Apache Auth (apache-auth)' },
         { value: 'apache-badbots', text: 'Apache Bad Bots (apache-badbots)' },
         { value: 'apache-botsearch', text: 'Apache Bot Search (apache-botsearch)' },
