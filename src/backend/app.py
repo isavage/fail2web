@@ -5,18 +5,28 @@ import subprocess
 import logging
 from functools import wraps
 import jwt
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 import json
 import configparser
 from pathlib import Path
 import re
 import time
+import hmac
+import ipaddress
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
-app.config['SECRET_KEY'] = os.getenv('FAIL2WEB_SECRET_KEY', 'your-secret-key-here')
-app.config['JWT_SECRET_KEY'] = os.getenv('FAIL2WEB_SECRET_KEY', 'your-secret-key-here')
+SECRET_KEY = os.getenv('FAIL2WEB_SECRET_KEY', '')
+app.config['SECRET_KEY'] = SECRET_KEY
+app.config['JWT_SECRET_KEY'] = SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 CORS(app)
+
+@app.after_request
+def set_security_headers(response):
+    """Anti-clickjacking headers on every response (additive, no functional change)"""
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['Content-Security-Policy'] = "frame-ancestors 'self'"
+    return response
 
 def add_cors_headers(response):
     """Add CORS headers to response"""
@@ -29,10 +39,41 @@ def add_cors_headers(response):
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING)  # Reduced from INFO to WARNING
 
-# Get environment variables
-USERNAME = os.getenv('FAIL2WEB_USERNAME', 'admin')
-PASSWORD = os.getenv('FAIL2WEB_PASSWORD', 'admin')
+# Get environment variables (no defaults: fail closed at startup if unset)
+USERNAME = os.getenv('FAIL2WEB_USERNAME', '')
+PASSWORD = os.getenv('FAIL2WEB_PASSWORD', '')
 jail_d_path = '/data/jail.d'  # Path to jail.d directory in container
+
+_missing_env = [n for n, v in (('FAIL2WEB_USERNAME', USERNAME),
+                               ('FAIL2WEB_PASSWORD', PASSWORD),
+                               ('FAIL2WEB_SECRET_KEY', SECRET_KEY)) if not v]
+if _missing_env:
+    raise SystemExit(
+        'FATAL: missing required environment variable(s): '
+        + ', '.join(_missing_env) + '. Refusing to start with empty credentials.'
+    )
+
+# Strict allowlist for jail/filter names: prevents path traversal into
+# action.d/ etc. and argument injection into fail2ban-client.
+JAIL_NAME_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+def validate_jail_name(name):
+    return isinstance(name, str) and bool(JAIL_NAME_RE.match(name))
+
+def validate_ip_address(ip):
+    try:
+        ipaddress.ip_address(str(ip).strip())
+        return True
+    except ValueError:
+        return False
+
+def jail_config_path(jail_name):
+    """Resolve jail.d/<name>.local and assert it stays inside jail.d."""
+    base = Path(jail_d_path).resolve()
+    path = (base / f"{jail_name}.local").resolve()
+    if not path.is_relative_to(base):
+        raise ValueError('Invalid jail name')
+    return path
 
 def token_required(f):
     @wraps(f)
@@ -186,12 +227,18 @@ def login():
         username = data.get('username')
         password = data.get('password')
         
-        if username == USERNAME and password == PASSWORD:
+        credentials_ok = (
+            isinstance(username, str) and isinstance(password, str)
+            and hmac.compare_digest(username, USERNAME)
+            and hmac.compare_digest(password, PASSWORD)
+        )
+        if credentials_ok:
             # Generate JWT token with explicit algorithm
+            now = datetime.now(timezone.utc)
             payload = {
                 'sub': username,
-                'exp': datetime.utcnow() + app.config['JWT_ACCESS_TOKEN_EXPIRES'],
-                'iat': datetime.utcnow()
+                'exp': now + app.config['JWT_ACCESS_TOKEN_EXPIRES'],
+                'iat': now
             }
             token = jwt.encode(payload, app.config['JWT_SECRET_KEY'], algorithm='HS256')
             
@@ -280,37 +327,34 @@ def create_jail_config():
                 return add_cors_headers(jsonify({'error': f'Missing required field: {field}'})), 400
         
         jail_name = data['name']
-        jail_filename = f"{jail_name}.local"
-        jail_filepath = Path(jail_d_path) / jail_filename
+        if not validate_jail_name(jail_name):
+            return add_cors_headers(jsonify({'error': 'Invalid jail name (allowed: letters, digits, "_", "-"; max 64 chars)'})), 400
+        try:
+            jail_filepath = jail_config_path(jail_name)
+        except ValueError:
+            return add_cors_headers(jsonify({'error': 'Invalid jail name'})), 400
         
         # Write config file
         write_config_file(jail_filepath, data)
         
-        # Clean reload: stop fail2ban, reload, restart
-        # Stop fail2ban completely
-        stop_response = fail2ban_command('stop')
-        
-        # Wait for stop to complete
+        # Apply without a protection blackout: 'fail2ban-client reload' re-reads
+        # jail.d and creates new jails (fail2ban >= 0.10). Verify afterwards and,
+        # if the reload skipped the jail, start it explicitly as a fallback.
+        reload_response = fail2ban_command('reload')
         time.sleep(2)
-        
-        # Start fail2ban (will auto-read new configs)
-        start_response = fail2ban_command('start')
-        
-        # Wait for startup and verify
-        time.sleep(3)
         status_response = fail2ban_command('status')
-        jail_active = jail_name in str(status_response) if status_response else False
-        
+        jail_active = bool(status_response) and jail_name in status_response
         if not jail_active:
-            # Try alternative start method
-            fail2ban_command(f'start {jail_name} --once')
+            fail2ban_command(f'start {jail_name}')
+            time.sleep(2)
+            status_response = fail2ban_command('status')
+            jail_active = bool(status_response) and jail_name in status_response
         
         return add_cors_headers(jsonify({
             'status': 'success',
-            'message': f'Jail {jail_name} created and activated',
+            'message': f'Jail {jail_name} created and activated' if jail_active else f'Jail {jail_name} saved but not active yet - check logpath/filter',
             'jail_active': jail_active,
-            'stop_response': str(stop_response),
-            'start_response': str(start_response),
+            'reload_response': str(reload_response),
             'status_response': str(status_response)
         }))
         
@@ -348,8 +392,12 @@ def write_config_file(filepath, data):
 @token_required
 def delete_jail_config(jail_name):
     try:
-        jail_filename = f"{jail_name}.local"
-        jail_filepath = Path(jail_d_path) / jail_filename
+        if not validate_jail_name(jail_name):
+            return jsonify({'error': 'Invalid jail name'}), 400
+        try:
+            jail_filepath = jail_config_path(jail_name)
+        except ValueError:
+            return jsonify({'error': 'Invalid jail name'}), 400
         
         if not jail_filepath.exists():
             return jsonify({'error': f'Jail {jail_name} not found'}), 404
@@ -383,6 +431,8 @@ def delete_jail_config(jail_name):
 @token_required
 def start_jail(jail_name):
     try:
+        if not validate_jail_name(jail_name):
+            return jsonify({'error': 'Invalid jail name'}), 400
         response = fail2ban_command(f'start {jail_name}')
         if response is None:
             return jsonify({'error': f'Failed to start jail {jail_name}'}), 500
@@ -395,6 +445,8 @@ def start_jail(jail_name):
 @token_required
 def stop_jail(jail_name):
     try:
+        if not validate_jail_name(jail_name):
+            return jsonify({'error': 'Invalid jail name'}), 400
         response = fail2ban_command(f'stop {jail_name}')
         if response is None:
             return jsonify({'error': f'Failed to stop jail {jail_name}'}), 500
@@ -422,7 +474,9 @@ def reload_fail2ban():
 @token_required
 def get_ignoreip():
     try:
-        ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
+        # Must match the lowercase name every jail includes:
+        #   include = /data/jail.d/ignoreip.conf
+        ignoreip_file = Path(jail_d_path) / 'ignoreip.conf'
         
         # If file doesn't exist, create it with default IPs
         if not ignoreip_file.exists():
@@ -578,7 +632,7 @@ def update_ignoreip():
         ignoreip_text = '\n            '.join(all_ips)
         config['DEFAULT']['ignoreip'] = ignoreip_text
         
-        ignoreip_file = Path(jail_d_path) / 'ignoreIP.conf'
+        ignoreip_file = Path(jail_d_path) / 'ignoreip.conf'
         ignoreip_file.parent.mkdir(parents=True, exist_ok=True)
         
         with open(ignoreip_file, 'w') as f:
@@ -599,6 +653,8 @@ def update_ignoreip():
 @app.route('/api/banned/<jail_name>')
 @token_required
 def get_banned(jail_name):
+    if not validate_jail_name(jail_name):
+        return jsonify({'error': 'Invalid jail name'}), 400
     response = fail2ban_command(f'status {jail_name}')
     if response is None:
         return jsonify({'error': f'Failed to get status for jail {jail_name}'}), 500
@@ -614,6 +670,12 @@ def ban_ip():
         
         if not jail_name or not ip_address:
             return jsonify({'error': 'Missing jail name or IP address'}), 400
+        
+        if not validate_jail_name(jail_name):
+            return jsonify({'error': 'Invalid jail name'}), 400
+        if not validate_ip_address(ip_address):
+            return jsonify({'error': f'Invalid IP address: {ip_address}'}), 400
+        ip_address = str(ip_address).strip()
         
         # Correct syntax: set <jail> banip <ip>
         response = fail2ban_command(f'set {jail_name} banip {ip_address}')
@@ -645,6 +707,12 @@ def unban_ip():
         if not jail_name or not ip_address:
             return jsonify({'error': 'Missing jail name or IP address'}), 400
         
+        if not validate_jail_name(jail_name):
+            return jsonify({'error': 'Invalid jail name'}), 400
+        if not validate_ip_address(ip_address):
+            return jsonify({'error': f'Invalid IP address: {ip_address}'}), 400
+        ip_address = str(ip_address).strip()
+        
         # Correct syntax: set <jail> unbanip <ip>
         response = fail2ban_command(f'set {jail_name} unbanip {ip_address}')
         if response is None:
@@ -658,6 +726,8 @@ def unban_ip():
 @token_required
 def get_filter_content(filter_name):
     try:
+        if not validate_jail_name(filter_name):
+            return jsonify({'error': 'Invalid filter name'}), 400
         # Paths for filter configuration files based on docker-compose mounts
         # Filter files are mounted at /data/fail2ban/filter.d/ in fail2web container
         possible_paths = [
