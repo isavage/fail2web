@@ -21,6 +21,12 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    healthcheck:
+      test: ["CMD", "fail2ban-client", "--socket", "/var/run/fail2ban/fail2ban.sock", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   fail2web:
@@ -41,9 +47,16 @@ services:
       - FAIL2WEB_PASSWORD=${FAIL2WEB_PASSWORD}
       - FAIL2WEB_SECRET_KEY=${FAIL2WEB_SECRET_KEY}
       - TZ=${TZ:-America/New_York}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
     depends_on:
-      - fail2ban
+      fail2ban:
+        condition: service_healthy
 
 networks:
   fail2web.net:

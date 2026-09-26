@@ -220,6 +220,26 @@ def fail2ban_command(cmd):
 def index():
     return send_from_directory('../frontend', 'index.html')
 
+@app.route('/api/health')
+def health():
+    """Unauthenticated health check: verifies the fail2ban socket is reachable."""
+    socket_path = '/var/run/fail2ban/fail2ban.sock'
+    try:
+        result = subprocess.run(
+            ['fail2ban-client', '--socket', socket_path, 'ping'],
+            capture_output=True, text=True, timeout=5, check=False
+        )
+        healthy = result.returncode == 0 and 'pong' in result.stdout.lower()
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        healthy = False
+    status = 200 if healthy else 503
+    return jsonify({
+        'status': 'healthy' if healthy else 'unhealthy',
+        'fail2ban': 'connected' if healthy else 'unreachable',
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    }), status
+
 @app.route('/api/login', methods=['POST'])
 def login():
     try:
