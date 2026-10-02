@@ -20,9 +20,20 @@ fail2web is a comprehensive Docker-based solution that includes both the fail2ba
 - **Volume management**: Persistent storage for configurations and data
 - **Network isolation**: Secure communication between components
 
-![Screenshot 2025-02-28 at 7 32 16 PM](https://github.com/user-attachments/assets/6255ac88-0c25-457d-bc65-475de9d892e2)
-
-![Screenshot 2025-02-28 at 7 33 12 PM](https://github.com/user-attachments/assets/89d984bd-e343-4e31-89fe-39ef19f083ff)
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/login.png" alt="Login screen"><br><b>Login</b></td>
+    <td align="center"><img src="docs/screenshots/dashboard-jails.png" alt="Jails dashboard"><br><b>Dashboard</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/banned-ips.png" alt="Banned IP management"><br><b>Banned IPs</b></td>
+    <td align="center"><img src="docs/screenshots/configuration.png" alt="Jail and filter configuration"><br><b>Configuration</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/mobile-dashboard.png" width="260" alt="Mobile dashboard"><br><b>Mobile</b></td>
+    <td align="center"><img src="docs/screenshots/mobile-drawer.png" width="260" alt="Mobile navigation drawer"><br><b>Mobile navigation</b></td>
+  </tr>
+</table>
 
 ## 🚀 Features
 
@@ -44,7 +55,7 @@ fail2web is a comprehensive Docker-based solution that includes both the fail2ba
 ### **Security & Authentication**
 - **JWT Authentication**: Secure token-based authentication
 - **Session Management**: Automatic token verification and renewal
-- **Inactivity Timeout**: Automatic logout after 1 minute of inactivity
+- **Inactivity Timeout**: Automatic logout after 2 minutes of inactivity
 
 ### **User Interface**
 - **Responsive Design**: Works on desktop and mobile devices
