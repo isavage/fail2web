@@ -3,150 +3,311 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fail2Web Dashboard</title>
+    <title>Fail2Web — Security Console</title>
     <style>html.auth-pending body{visibility:hidden}html.auth-pending body.auth-ready{visibility:visible}</style>
     <script>document.documentElement.classList.add('auth-pending');(function(){try{var t=localStorage.getItem('token');if(!t){var m=document.cookie.match(/(?:^|;\s*)token=([^;]*)/);if(m)t=decodeURIComponent(m[1]);}if(!t)location.replace('/login.html');}catch(e){}})();</script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <header>
-        <div class="header-content">
-            <h1>Fail2Web Dashboard</h1>
-            <button id="logout-btn" class="logout-button">Logout</button>
-        </div>
-    </header>
-    <div class="container">
-        <main>
-            <section id="jails-section">
-                <div class="section-header">
-                    <h2>Active Jails</h2>
-                    <button onclick="showJailConfig()" class="config-button">Manage Jails</button>
+    <div class="app">
+        <!-- ================= Sidebar ================= -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
                 </div>
-                <div id="jails-list"></div>
-            </section>
-            
-            <section id="jail-config-section" style="display: none;">
-                <div class="section-header">
-                    <h2>Jail Configuration</h2>
-                    <button onclick="hideJailConfig()" class="close-button">Close</button>
+                <div>
+                    <div class="brand-name">Fail2Web</div>
+                    <div class="brand-tag">Security Console</div>
                 </div>
-                <div class="jail-config-container">
-                    <div class="ignoreip-management">
-                        <h3>Ignore IP Management</h3>
-                        <p>Add IP addresses or CIDR ranges that should never be banned:</p>
-                        <div class="ignoreip-form">
-                            <div class="form-group">
-                                <label for="new-ignoreip">Add IP/CIDR:</label>
-                                <div class="ip-input-group">
-                                    <input type="text" id="new-ignoreip" placeholder="e.g., 192.168.1.100 or 10.0.0.0/8">
-                                    <button type="button" onclick="addIgnoreIP()" class="add-button">Add</button>
+            </div>
+
+            <div class="nav-label">Monitor</div>
+            <button class="nav-item active" data-view="jails" id="nav-jails">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                Jails
+                <span class="nav-badge" id="nav-badge-jails">0</span>
+            </button>
+            <button class="nav-item" data-view="banned" id="nav-banned">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+                Banned IPs
+                <span class="nav-badge" id="nav-badge-banned">0</span>
+            </button>
+
+            <div class="nav-label">Manage</div>
+            <button class="nav-item" data-view="config" id="nav-config">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+                Configuration
+            </button>
+
+            <div class="sidebar-footer">
+                <div class="health-card">
+                    <div class="hc-title"><span>Engine</span><span id="hc-time"></span></div>
+                    <div class="hc-row"><span class="hc-dot pending" id="hc-dot"></span><span id="hc-text">Checking…</span></div>
+                </div>
+                <button id="logout-btn" class="logout-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Logout
+                </button>
+            </div>
+        </aside>
+        <div id="sidebar-scrim"></div>
+
+        <!-- ================= Main ================= -->
+        <div class="main">
+            <header class="topbar">
+                <button class="hamburger" id="hamburger" aria-label="Menu">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div>
+                    <h1 class="page-title" id="page-title">Active Jails</h1>
+                    <p class="page-subtitle" id="page-subtitle">Live status of all fail2ban jails</p>
+                </div>
+                <div class="topbar-right">
+                    <span class="pill pending" id="health-pill"><span class="dot"></span><span id="health-pill-text">Checking…</span></span>
+                    <button class="btn btn-outline btn-sm" id="refresh-btn" title="Refresh data">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        <span class="pill-text-full">Refresh</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                <!-- ========== VIEW: Jails ========== -->
+                <section class="view active" id="view-jails">
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-icon indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                            <div><div class="stat-value" id="stat-jails">0</div><div class="stat-label">Active Jails</div></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg></div>
+                            <div><div class="stat-value" id="stat-banned">0</div><div class="stat-label">Banned Addresses</div></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+                            <div><div class="stat-value" id="stat-subnets">0</div><div class="stat-label">Banned Subnets</div></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                            <div><div class="stat-value" id="stat-enabled">0</div><div class="stat-label">Config Jails Enabled</div></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-head">
+                            <div>
+                                <h3>Active Jails</h3>
+                                <p class="sub">Select a jail to inspect its banned addresses</p>
+                            </div>
+                            <div class="spacer"></div>
+                            <button class="btn btn-primary btn-sm" onclick="showJailConfig()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                Manage Jails
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="jail-grid" id="jails-list"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ========== VIEW: Banned IPs ========== -->
+                <section class="view" id="view-banned">
+                    <div class="card">
+                        <div class="card-head">
+                            <div>
+                                <h3>Banned IPs</h3>
+                                <p class="sub" id="banned-sub">Banned addresses for the selected jail</p>
+                            </div>
+                            <div class="spacer"></div>
+                            <div class="toolbar">
+                                <div class="search">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                    <input type="text" id="ip-search" class="input" placeholder="Search IPs…" onkeyup="filterIPs()">
                                 </div>
                             </div>
                         </div>
-                        <div class="ignoreip-list" id="ignoreip-list">
-                            <!-- Current ignoreIP list will be populated here -->
-                        </div>
-                        <div class="form-buttons">
-                            <button type="button" onclick="loadIgnoreIP()" class="refresh-button">Refresh List</button>
+                        <div class="card-body">
+                            <div class="toolbar" style="margin-bottom:18px;">
+                                <div class="search" style="flex:1;max-width:340px;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+                                    <input type="text" id="ip-to-ban" class="input" placeholder="Add IP or CIDR (e.g. 10.1.2.0/24)">
+                                </div>
+                                <select id="ban-jail-select" class="select" style="max-width:220px;"></select>
+                                <button onclick="banIP()" class="btn btn-danger">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+                                    Ban
+                                </button>
+                            </div>
+                            <div class="jail-switcher toolbar" id="jail-switcher" style="margin-bottom:16px;"></div>
+                            <div id="banned-ips"></div>
                         </div>
                     </div>
-                    <div class="jail-form">
-                        <h3>Create/Edit Jail</h3>
-                        <form id="jail-form">
-                        <div class="form-row-compact">
-                            <div class="form-group">
-                                <label for="jail-name">Jail Name:</label>
-                                <input type="text" id="jail-name" required>
+                </section>
+
+                <!-- ========== VIEW: Configuration ========== -->
+                <section class="view" id="view-config">
+                    <div class="config-grid">
+                        <!-- Create / edit jail -->
+                        <div class="card">
+                            <div class="card-head">
+                                <div>
+                                    <h3 id="jail-form-title">Create Jail</h3>
+                                    <p class="sub">Pick a filter, review smart defaults, then save</p>
+                                </div>
+                                <div class="spacer"></div>
+                                <button class="btn btn-ghost btn-sm" onclick="hideJailConfig()">Done</button>
                             </div>
-                            <div class="form-group">
-                                <label for="jail-filter">Filter:</label>
-                                <select id="jail-filter" onchange="onFilterChange(this.value)" required>
-                                    <option value="">Select a filter...</option>
-                                </select>
+                            <div class="card-body">
+                                <form id="jail-form">
+                                    <div class="form-grid cols-2" style="margin-bottom:14px;">
+                                        <div>
+                                            <label class="field-label" for="jail-name">Jail Name *</label>
+                                            <input type="text" id="jail-name" class="input" placeholder="e.g. sshd" required>
+                                        </div>
+                                        <div>
+                                            <label class="field-label" for="jail-filter-custom">Custom Filter</label>
+                                            <input type="text" id="jail-filter-custom" class="input" placeholder="Select a filter below, or type a custom name">
+                                        </div>
+                                    </div>
+
+                                    <label class="field-label">Filter *</label>
+                                    <div class="search" style="margin-bottom:10px;">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                        <input type="text" id="filter-search" class="input" placeholder="Search filters…" onkeyup="filterFilterList()">
+                                    </div>
+                                    <div class="filter-list" id="filter-list"></div>
+                                    <input type="hidden" id="jail-filter" required>
+
+                                    <div id="filter-content" style="display:none;">
+                                        <label class="field-label" style="margin-top:14px;">Filter Regex (read-only preview)</label>
+                                        <div class="codebox" id="filter-regex"></div>
+                                    </div>
+
+                                    <div class="form-grid" style="margin-top:16px;">
+                                        <div>
+                                            <label class="field-label" for="jail-logpath">Log Path *</label>
+                                            <input type="text" id="jail-logpath" class="input" placeholder="e.g. /var/log/auth.log" required>
+                                            <small class="form-hint">Must be accessible inside the fail2ban container — check docker-compose.yml volume mounts.</small>
+                                        </div>
+                                        <div class="form-grid cols-3">
+                                            <div>
+                                                <label class="field-label" for="jail-maxretry">Max Retry</label>
+                                                <input type="number" id="jail-maxretry" class="input" value="3" min="1">
+                                            </div>
+                                            <div>
+                                                <label class="field-label" for="jail-findtime">Find Time (s)</label>
+                                                <input type="number" id="jail-findtime" class="input" value="3600" min="1">
+                                            </div>
+                                            <div>
+                                                <label class="field-label" for="jail-bantime">Ban Time (s)</label>
+                                                <input type="number" id="jail-bantime" class="input" value="600" min="1">
+                                            </div>
+                                        </div>
+                                        <div class="form-grid cols-2" style="align-items:end;">
+                                            <div>
+                                                <label class="field-label" for="jail-action">Action</label>
+                                                <input type="text" id="jail-action" class="input" placeholder="e.g. %(action_mw)s">
+                                            </div>
+                                            <div style="display:flex;justify-content:flex-end;padding-bottom:4px;">
+                                                <label class="switch">
+                                                    <input type="checkbox" id="jail-enabled" checked>
+                                                    <span class="track"></span>
+                                                    <span class="sw-label">Enabled</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="cfg-actions" style="margin-top:20px;">
+                                        <button type="submit" class="btn btn-success">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                            Save Jail
+                                        </button>
+                                        <button type="button" onclick="clearJailForm()" class="btn btn-ghost">Clear</button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
-                        
-                        <div class="form-group">
-                            <input type="text" id="jail-filter-custom" placeholder="Enter custom filter name" style="display: none; margin-top: 0.5rem;">
-                            <div id="filter-content" style="display: none; margin-top: 0.5rem;">
-                                <label for="filter-regex">Filter Regex:</label>
-                                <textarea id="filter-regex" rows="4" readonly style="background: #f8f9fa; font-family: monospace; font-size: 0.875rem; width: 100%; box-sizing: border-box;"></textarea>
+
+                        <!-- Right column: ignore IP + existing jails -->
+                        <div style="display:flex;flex-direction:column;gap:18px;min-width:0;">
+                            <div class="card">
+                                <div class="card-head">
+                                    <div>
+                                        <h3>Ignore IPs</h3>
+                                        <p class="sub">Addresses and CIDR ranges that are never banned</p>
+                                    </div>
+                                    <div class="spacer"></div>
+                                    <button type="button" onclick="loadIgnoreIP()" class="btn btn-outline btn-sm">Refresh</button>
+                                </div>
+                                <div class="card-body">
+                                    <div class="toolbar" style="margin-bottom:14px;">
+                                        <input type="text" id="new-ignoreip" class="input" placeholder="e.g. 192.168.1.100 or 10.0.0.0/8" style="max-width:340px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addIgnoreIP();}">
+                                        <button type="button" onclick="addIgnoreIP()" class="btn btn-success">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                            Add
+                                        </button>
+                                    </div>
+                                    <div class="chips" id="ignoreip-list"></div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-head">
+                                    <div>
+                                        <h3>Existing Jails</h3>
+                                        <p class="sub">Configured in jail.d — edit, toggle or delete</p>
+                                    </div>
+                                    <div class="spacer"></div>
+                                    <button class="btn btn-outline btn-sm" onclick="loadJailConfigs()">Reload</button>
+                                </div>
+                                <div class="card-body">
+                                    <div class="jail-config-list" id="jail-config-list"></div>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="jail-logpath">Log Path:</label>
-                            <input type="text" id="jail-logpath" placeholder="e.g., /var/log/auth.log" required>
-                            <small class="form-hint">Note: This path must be accessible inside the fail2ban container. Ensure the corresponding host path is mounted in docker-compose.yml volumes.</small>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="jail-maxretry">Max Retry:</label>
-                                <input type="number" id="jail-maxretry" value="3" min="1">
-                            </div>
-                            <div class="form-group">
-                                <label for="jail-findtime">Find Time (s):</label>
-                                <input type="number" id="jail-findtime" value="3600" min="1">
-                            </div>
-                            <div class="form-group">
-                                <label for="jail-bantime">Ban Time (s):</label>
-                                <input type="number" id="jail-bantime" value="600" min="1">
-                            </div>
-                        </div>
-                        
-                        <div class="form-row-compact">
-                            <div class="form-group">
-                                <label for="jail-action">Action:</label>
-                                <input type="text" id="jail-action" placeholder="e.g., %(action_mw)s">
-                            </div>
-                            <div class="form-group">
-                                <label style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.5rem;">
-                                    <input type="checkbox" id="jail-enabled" checked>
-                                    Enabled
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="form-buttons">
-                            <button type="submit" class="save-button">Save Jail</button>
-                            <button type="button" onclick="clearJailForm()" class="clear-button">Clear</button>
-                        </div>
-                    </form>
                     </div>
-                    <div class="jail-list">
-                        <h3>Existing Jails</h3>
-                        <div id="jail-config-list">
-                            <!-- Jail configurations will be populated here -->
-                        </div>
-                    </div>
-                </div>
-            </section>
-            
-            <section id="banned-ips-section">
-                <div class="section-header">
-                    <h2>Banned IPs</h2>
-                    <div class="search-container">
-                        <input type="text" 
-                               id="ip-search" 
-                               placeholder="Search IPs..."
-                               onkeyup="filterIPs()"
-                               class="ip-search-input">
-                        <input type="text" 
-                               id="ip-to-ban" 
-                               placeholder="Add IP or CIDR (e.g. 10.1.2.0/24)"
-                               class="ip-input">
-                        <button onclick="banIP()" class="ban-button">Ban</button>
-                    </div>
-                </div>
-                <div id="banned-ips"></div>
-            </section>
-        </main>
+                </section>
+
+                <footer class="app-footer">&copy; 2025 VRS. All rights reserved.</footer>
+            </div>
+        </div>
     </div>
+
+    <!-- Toasts -->
+    <div id="toasts"></div>
+
+    <!-- Busy overlay -->
+    <div id="busy-overlay">
+        <div class="busy-card">
+            <div class="spinner"></div>
+            <div class="b-title" id="busy-title">Working…</div>
+            <div class="b-sub" id="busy-sub">Please wait</div>
+        </div>
+    </div>
+
+    <!-- Confirm modal -->
+    <div id="confirm-modal" style="position:fixed;inset:0;z-index:310;display:none;place-items:center;background:rgba(15,23,42,0.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);">
+        <div class="busy-card" style="min-width:320px;max-width:440px;padding:26px 30px;text-align:left;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <div id="confirm-icon" style="width:40px;height:40px;border-radius:12px;background:var(--danger-soft);color:var(--danger);display:grid;place-items:center;flex-shrink:0;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div class="b-title" id="confirm-title" style="font-size:1rem;">Are you sure?</div>
+            </div>
+            <div class="b-sub" id="confirm-message" style="font-size:0.85rem;line-height:1.5;margin-bottom:20px;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+                <button class="btn btn-danger" id="confirm-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/main.js"></script>
-    <footer class="copyright-footer">
-        <p>&copy; 2025 VRS. All rights reserved.</p>
-    </footer>
 </body>
 </html>

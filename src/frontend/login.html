@@ -3,32 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fail2Web Login</title>
+    <title>Sign in — Fail2Web</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/login.css">
 </head>
 <body class="login-page">
-    <div class="header-container">
-        <h1>Fail2Web</h1>
-        <h2>Fail2Ban Web Management</h2>
-    </div>
-    <div class="login-container">
-        <form id="loginForm" onsubmit="return handleLogin(event)">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required>
+    <div class="login-shell">
+        <!-- Brand panel -->
+        <section class="login-aside">
+            <div class="aside-brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                </div>
+                <div>
+                    <div class="aside-name">Fail2Web</div>
+                    <div class="aside-tag">Security Console</div>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+
+            <h2 class="aside-head">Ban management,<br>without the terminal.</h2>
+            <p class="aside-copy">A clean control plane for fail2ban — jails, filters, ignore lists and banned addresses, all from your browser.</p>
+
+            <ul class="aside-list">
+                <li>
+                    <span class="al-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+                    <div><b>Live jail overview</b><span>Every jail and its ban count at a glance.</span></div>
+                </li>
+                <li>
+                    <span class="al-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg></span>
+                    <div><b>Ban &amp; unban instantly</b><span>Act on single IPs or CIDR ranges.</span></div>
+                </li>
+                <li>
+                    <span class="al-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
+                    <div><b>Config that stays in sync</b><span>Jail files written straight to jail.d.</span></div>
+                </li>
+            </ul>
+
+            <div class="aside-foot">Protected by JWT sessions · auto-logout on inactivity</div>
+        </section>
+
+        <!-- Form panel -->
+        <section class="login-panel">
+            <div class="login-container">
+                <div class="login-head">
+                    <div class="login-mark">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                    </div>
+                    <h1>Welcome back</h1>
+                    <p>Sign in to your Fail2Web console.</p>
+                </div>
+
+                <form id="loginForm" onsubmit="return handleLogin(event)">
+                    <div class="form-group">
+                        <label class="field-label" for="username">Username</label>
+                        <input type="text" id="username" class="input" autocomplete="username" placeholder="admin" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label class="field-label" for="password">Password</label>
+                        <div class="pass-wrap">
+                            <input type="password" id="password" class="input" autocomplete="current-password" placeholder="••••••••" required>
+                            <button type="button" class="pass-toggle" id="pass-toggle" aria-label="Show password">
+                                <svg id="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <svg id="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.05a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="error-message" id="error-message"></div>
+
+                    <button type="submit" class="btn btn-primary login-button" id="login-button">
+                        <span class="lb-label">Sign in</span>
+                        <span class="lb-spinner" hidden></span>
+                    </button>
+                </form>
+
+                <div class="login-status">
+                    <span class="hc-dot pending" id="login-hc-dot"></span>
+                    <span id="login-hc-text">Checking fail2ban…</span>
+                </div>
+
+                <p class="login-note">Access is restricted to the configured administrator account.</p>
             </div>
-            <button type="submit" class="login-button">Login</button>
-        </form>
-        <div id="error-message" class="error-message" style="display: none;"></div>
+        </section>
     </div>
+
+    <footer class="copyright-footer">&copy; 2025 VRS. All rights reserved.</footer>
+
+    <div id="toasts"></div>
     <script src="js/login.js"></script>
-    <footer class="copyright-footer">
-        <p>&copy; 2025 VRS. All rights reserved.</p>
-    </footer>
 </body>
 </html>

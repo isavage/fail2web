@@ -1,1039 +1,83 @@
-// main.js
+// ============================================================
+// Fail2Web — main.js (modern console UI)
+// All backend endpoints and behaviors preserved.
+// ============================================================
 
-const SESSION_TIMEOUT = 120000; // 2 minutes in milliseconds
+const SESSION_TIMEOUT = 120000; // 2 minutes inactivity logout
+const REFRESH_MS = 30000;       // data refresh every 30s
 
-// Initialize the frontend application
-document.addEventListener("DOMContentLoaded", () => {
-    // Set up event listeners and render components
-    setupEventListeners();
-    renderComponents();
-});
-
-// Function to set up event listeners
-function setupEventListeners() {
-    // Set up jail form submission
-    const jailForm = document.getElementById("jail-form");
-    if (jailForm) {
-        jailForm.addEventListener("submit", handleJailFormSubmit);
-    }
-    
-    // Set up logout button
-    const logoutBtn = document.getElementById("logout-btn");
-    if (logoutBtn) {
-        logoutBtn.addEventListener("click", logout);
-    }
-}
-
-// Function to render components
-function renderComponents() {
-    // renderJailList() and renderBannedIPs() are handled by fetchJails() which runs on page load
-    // fetchJails() will select the first jail by default and display its banned IPs
-    loadJailConfigs();
-}
-
-// Jail Management Functions
-let jailTemplates = {};
 let ignoreIPList = [];
+let currentJails = [];          // active jail names
+let selectedJail = null;        // currently inspected jail
+let jailBannedCounts = {};      // jail -> { ips: [...], subnets: n }
+let selectedFilter = '';        // filter chosen in config form
 
-function showJailConfig() {
-    document.getElementById('jails-section').style.display = 'none';
-    document.getElementById('banned-ips-section').style.display = 'none';
-    document.getElementById('jail-config-section').style.display = 'block';
-    loadJailConfigs();
-    loadIgnoreIP();
-    
-    // Initialize filter options
-    populateFilterOptions();
+// ---------- Icons (shared) ----------
+const ICONS = {
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+    play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
+    ban: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+};
+
+const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#2563eb'];
+
+// ============================================================
+// UI helpers: toasts / confirm modal / busy overlay
+// ============================================================
+function toast(type, message, ms = 4200) {
+    const wrap = document.getElementById('toasts');
+    if (!wrap) return;
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    const icon = type === 'success' ? ICONS.check : type === 'error' ? ICONS.x : type === 'warning' ? ICONS.warn : ICONS.info;
+    el.innerHTML = icon + '<div>' + escapeHtml(message) + '</div>';
+    wrap.appendChild(el);
+    setTimeout(() => {
+        el.classList.add('leaving');
+        setTimeout(() => el.remove(), 260);
+    }, ms);
 }
 
-function onFilterChange(filterValue) {
-    const customFilterInput = document.getElementById('jail-filter-custom');
-    const filterContent = document.getElementById('filter-content');
-    const filterRegex = document.getElementById('filter-regex');
-    const jailName = document.getElementById('jail-name');
-    const logpathInput = document.getElementById('jail-logpath');
-    
-    if (filterValue === 'custom') {
-        customFilterInput.style.display = 'block';
-        customFilterInput.required = true;
-        filterContent.style.display = 'none';
-        // Clear defaults for custom
-        jailName.value = '';
-        logpathInput.value = '';
-        resetToDefaults();
-    } else if (filterValue === '') {
-        customFilterInput.style.display = 'none';
-        customFilterInput.required = false;
-        filterContent.style.display = 'none';
-        // Clear all fields
-        jailName.value = '';
-        logpathInput.value = '';
-        resetToDefaults();
-    } else {
-        customFilterInput.style.display = 'none';
-        customFilterInput.required = false;
-        // Set smart defaults based on filter
-        setFilterDefaults(filterValue);
-        // Load filter content
-        loadFilterContent(filterValue);
-    }
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function setFilterDefaults(filterValue) {
-    const jailName = document.getElementById('jail-name');
-    const logpathInput = document.getElementById('jail-logpath');
-    
-    const filterDefaults = {
-        'sshd': {
-            name: 'sshd',
-            logpath: '%(syslog_authpriv)s',
-            maxretry: 3,
-            findtime: 3600,
-            bantime: 60000
-        },
-        'sshd2': {
-            name: 'sshd2',
-            logpath: '%(syslog_authpriv)s',
-            maxretry: 3,
-            findtime: 1800,
-            bantime: 60000
-        },
-        'nginx': {
-            name: 'nginx',
-            logpath: '/var/log/nginx/access.log',
-            maxretry: 5,
-            findtime: 600,
-            bantime: 60000
-        },
-        'auth': {
-            name: 'auth',
-            logpath: '/var/log/nginx/access.log',
-            maxretry: 5,
-            findtime: 600,
-            bantime: 60000
-        },
-        'apache-auth': {
-            name: 'apache-auth',
-            logpath: '/var/log/apache2/error.log',
-            maxretry: 3,
-            findtime: 600,
-            bantime: 60000
-        },
-        'postfix': {
-            name: 'postfix',
-            logpath: '/var/log/mail.log',
-            maxretry: 5,
-            findtime: 600,
-            bantime: 180000
-        },
-        'dovecot': {
-            name: 'dovecot',
-            logpath: '/var/log/dovecot.log',
-            maxretry: 5,
-            findtime: 300,
-            bantime: 90000
-        },
-        'vsftpd': {
-            name: 'vsftpd',
-            logpath: '/var/log/vsftpd.log',
-            maxretry: 3,
-            findtime: 600,
-            bantime: 180000
-        },
-        'mysqld': {
-            name: 'mysqld',
-            logpath: '/var/log/mysql/error.log',
-            maxretry: 3,
-            findtime: 600,
-            bantime: 120000
-        }
-    };
-    
-    const defaults = filterDefaults[filterValue] || {
-        name: filterValue,
-        logpath: '/var/log/' + filterValue + '.log',
-        maxretry: 3,
-        findtime: 3600,
-        bantime: 60000
-    };
-    
-    jailName.value = defaults.name;
-    logpathInput.value = defaults.logpath;
-    document.getElementById('jail-maxretry').value = defaults.maxretry;
-    document.getElementById('jail-findtime').value = defaults.findtime;
-    document.getElementById('jail-bantime').value = defaults.bantime;
-
-    // Hint for sshd users
-    if (filterValue === 'sshd' || filterValue === 'sshd2') {
-        // SSH jails automatically use backend=systemd for better reliability in containers
-    }
-}
-
-function resetToDefaults() {
-    document.getElementById('jail-maxretry').value = 3;
-    document.getElementById('jail-findtime').value = 3600;
-    document.getElementById('jail-bantime').value = 60000;
-    document.getElementById('jail-action').value = '';
-    document.getElementById('jail-enabled').checked = true;
-}
-
-function loadFilterContent(filterName) {
-    fetch(`/api/filters/${filterName}`, {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => {
-        if (!response.ok) {
-            // Handle non-200 responses
-            if (response.status === 404) {
-                return { status: 'not_found', message: `Filter configuration for ${filterName} is not available. Using default settings.` };
-            }
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-        .then(data => {
-            if (data.status === 'success') {
-                const filterContent = document.getElementById('filter-content');
-                const filterRegex = document.getElementById('filter-regex');
-                
-                filterRegex.value = data.content;
-                filterContent.style.display = 'block';
-            } else if (data.status === 'not_found') {
-                // Filter not found, hide content section
-                const filterContent = document.getElementById('filter-content');
-                filterContent.style.display = 'none';
-            }
-        })
-        .catch(error => {
-            // Hide filter content section on error
-            const filterContent = document.getElementById('filter-content');
-            filterContent.style.display = 'none';
-        });
-}
-
-function populateFilterOptions() {
-    const filterSelect = document.getElementById('jail-filter');
-    
-    // Common filter options
-    const filters = [
-        { value: 'sshd', text: 'SSH (sshd)' },
-        { value: 'sshd2', text: 'SSH Enhanced (sshd2)' },
-        { value: 'nginx', text: 'Nginx (nginx)' },
-        { value: 'auth', text: 'Nginx Auth (auth)' },
-        { value: 'apache-auth', text: 'Apache Auth (apache-auth)' },
-        { value: 'apache-badbots', text: 'Apache Bad Bots (apache-badbots)' },
-        { value: 'apache-botsearch', text: 'Apache Bot Search (apache-botsearch)' },
-        { value: 'apache-common', text: 'Apache Common (apache-common)' },
-        { value: 'apache-fakegooglebot', text: 'Apache Fake Googlebot (apache-fakegooglebot)' },
-        { value: 'apache-modsecurity', text: 'Apache ModSecurity (apache-modsecurity)' },
-        { value: 'apache-nohome', text: 'Apache No Home (apache-nohome)' },
-        { value: 'apache-noscript', text: 'Apache No Script (apache-noscript)' },
-        { value: 'apache-overflows', text: 'Apache Overflows (apache-overflows)' },
-        { value: 'apache-pass', text: 'Apache Pass (apache-pass)' },
-        { value: 'apache-shellshock', text: 'Apache Shellshock (apache-shellshock)' },
-        { value: 'vsftpd', text: 'VSFTPD (vsftpd)' },
-        { value: 'proftpd', text: 'ProFTPD (proftpd)' },
-        { value: 'pure-ftpd', text: 'Pure-FTPd (pure-ftpd)' },
-        { value: 'wuftpd', text: 'WU-FTPd (wuftpd)' },
-        { value: 'postfix', text: 'Postfix (postfix)' },
-        { value: 'sendmail-auth', text: 'Sendmail Auth (sendmail-auth)' },
-        { value: 'sendmail-reject', text: 'Sendmail Reject (sendmail-reject)' },
-        { value: 'exim', text: 'Exim (exim)' },
-        { value: 'dovecot', text: 'Dovecot (dovecot)' },
-        { value: 'sieve', text: 'Sieve (sieve)' },
-        { value: 'solid-pop3d', text: 'Solid POP3d (solid-pop3d)' },
-        { value: 'courier-auth', text: 'Courier Auth (courier-auth)' },
-        { value: 'courier-smtp', text: 'Courier SMTP (courier-smtp)' },
-        { value: 'named', text: 'BIND9 (named)' },
-        { value: 'recidive', text: 'Recidive (recidive)' },
-        { value: 'murmur', text: 'Mumble (murmur)' },
-        { value: 'asterisk', text: 'Asterisk (asterisk)' },
-        { value: 'freeswitch', text: 'FreeSWITCH (freeswitch)' },
-        { value: 'mysqld', text: 'MySQL (mysqld)' },
-        { value: 'mysqld-auth', text: 'MySQL Auth (mysqld-auth)' },
-        { value: 'oracle', text: 'Oracle (oracle)' },
-        { value: 'php-url-fopen', text: 'PHP URL Fopen (php-url-fopen)' },
-        { value: 'roundcube-auth', text: 'Roundcube Auth (roundcube-auth)' },
-        { value: 'openwebmail', text: 'OpenWebMail (openwebmail)' },
-        { value: 'horde', text: 'Horde (horde)' },
-        { value: 'groupoffice', text: 'GroupOffice (groupoffice)' },
-        { value: 'sogo', text: 'SOGo (sogo)' },
-        { value: 'tomcat', text: 'Tomcat (tomcat)' },
-        { value: 'monit', text: 'Monit (monit)' },
-        { value: 'webmin', text: 'Webmin (webmin)' },
-        { value: 'drupal-auth', text: 'Drupal Auth (drupal-auth)' },
-        { value: 'magento', text: 'Magento (magento)' },
-        { value: 'wordpress', text: 'WordPress (wordpress)' },
-        { value: 'phpmyadmin', text: 'phpMyAdmin (phpmyadmin)' },
-        { value: 'guacamole', text: 'Guacamole (guacamole)' },
-        { value: 'slapd', text: 'OpenLDAP (slapd)' },
-        { value: 'directadmin', text: 'DirectAdmin (directadmin)' },
-        { value: 'iptables', text: 'iptables (iptables)' },
-        { value: 'nginx-http-auth', text: 'Nginx HTTP Auth (nginx-http-auth)' },
-        { value: 'nginx-limit-req', text: 'Nginx Limit Requests (nginx-limit-req)' },
-        { value: 'nginx-botsearch', text: 'Nginx Bot Search (nginx-botsearch)' },
-        { value: 'custom', text: 'Custom (specify below)' }
-    ];
-    
-    filterSelect.innerHTML = '<option value="">Select a filter...</option>';
-    filters.forEach(filter => {
-        const option = document.createElement('option');
-        option.value = filter.value;
-        option.textContent = filter.text;
-        filterSelect.appendChild(option);
+let confirmResolve = null;
+function showConfirm(title, message) {
+    return new Promise(resolve => {
+        confirmResolve = resolve;
+        const modal = document.getElementById('confirm-modal');
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-message').textContent = message;
+        modal.style.display = 'grid';
     });
 }
 
-function hideJailConfig() {
-    document.getElementById('jail-config-section').style.display = 'none';
-    document.getElementById('jails-section').style.display = 'block';
-    document.getElementById('banned-ips-section').style.display = 'block';
+function closeConfirm(result) {
+    document.getElementById('confirm-modal').style.display = 'none';
+    if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
 }
 
-function clearJailForm() {
-    document.getElementById('jail-form').reset();
-    document.getElementById('filter-content').style.display = 'none';
-    document.getElementById('jail-filter-custom').style.display = 'none';
-}
-function loadIgnoreIP() {
-    authenticatedFetch('/api/ignoreip')
-        .then(data => {
-            if (data.ignoreip) {
-                ignoreIPList = data.ignoreip;
-                renderIgnoreIPList();
-            }
-        })
-        .catch(error => {
-            console.error('Error loading ignoreIP:', error);
-            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
-                alert('Error loading ignoreIP: ' + error.message);
-            }
-        });
+function showBusy(title, sub) {
+    document.getElementById('busy-title').textContent = title;
+    document.getElementById('busy-sub').textContent = sub || 'Please wait…';
+    document.getElementById('busy-overlay').classList.add('show');
 }
 
-function renderIgnoreIPList() {
-    const container = document.getElementById('ignoreip-list');
-    container.innerHTML = '';
-    
-    if (ignoreIPList.length === 0) {
-        container.innerHTML = '<p>No ignoreIP entries found.</p>';
-        return;
-    }
-    
-    // Allow more IPs per row - let CSS flexbox handle the layout
-    // Just create one row with all IPs and let flexbox wrap them
-    const rowItem = document.createElement('div');
-    rowItem.className = 'ignoreip-row';
-    
-    const ipContainer = document.createElement('div');
-    ipContainer.className = 'ip-container';
-    
-    ignoreIPList.forEach((ip, index) => {
-        const ipItem = document.createElement('div');
-        ipItem.className = 'ignoreip-item-inline';
-        ipItem.innerHTML = `
-            <span class="ip-text">${ip}</span>
-            <button class="remove-ip-button-small" onclick="removeIgnoreIP('${ip}')">×</button>
-        `;
-        ipContainer.appendChild(ipItem);
-    });
-    
-    rowItem.appendChild(ipContainer);
-    container.appendChild(rowItem);
+function hideBusy() {
+    document.getElementById('busy-overlay').classList.remove('show');
 }
 
-function addIgnoreIP() {
-    const input = document.getElementById('new-ignoreip');
-    const ip = input.value.trim();
-    
-    if (!ip) {
-        alert('Please enter an IP address or CIDR range');
-        return;
-    }
-    
-    // Basic validation
-    const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    const cidrRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([0-2]?[0-9]|3[0-2])$/;
-    
-    if (!ipRegex.test(ip) && !cidrRegex.test(ip)) {
-        alert('Invalid IP or CIDR format. Please use format like 192.168.1.1 or 10.0.0.0/24');
-        return;
-    }
-    
-    // Check for duplicates
-    if (ignoreIPList.includes(ip)) {
-        alert('This IP is already in the ignore list');
-        return;
-    }
-    
-    // Add to local list and render
-    ignoreIPList.push(ip);
-    renderIgnoreIPList();
-    input.value = '';
-    
-    // Auto-save to backend
-    saveIgnoreIPToBackend();
-}
-
-function removeIgnoreIP(ip) {
-    ignoreIPList = ignoreIPList.filter(item => item !== ip);
-    renderIgnoreIPList();
-    
-    // Auto-save to backend after removal
-    saveIgnoreIPToBackend();
-}
-
-function saveIgnoreIPToBackend() {
-    authenticatedFetch('/api/ignoreip', {
-        method: 'POST',
-        body: JSON.stringify({
-            ignoreip: ignoreIPList
-        })
-    })
-    .then(data => {
-        if (data.status !== 'success') {
-            console.error('Error auto-saving ignoreIP:', data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error auto-saving ignoreIP:', error);
-    });
-}
-
-function saveIgnoreIP() {
-    authenticatedFetch('/api/ignoreip', {
-        method: 'POST',
-        body: JSON.stringify({
-            ignoreip: ignoreIPList
-        })
-    })
-    .then(data => {
-        if (data.status === 'success') {
-            alert('ignoreIP configuration saved successfully!');
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error saving ignoreIP:', error);
-        if (error.message !== 'Authentication failed' && error.message !== 'No token') {
-            alert('Error saving ignoreIP configuration: ' + error.message);
-        }
-    });
-}
-
-// Template functionality removed - not used in current implementation
-// Jail creation uses smart defaults and manual configuration instead
-
-function handleJailFormSubmit(event) {
-    event.preventDefault();
-    
-    const filterSelect = document.getElementById('jail-filter');
-    const customFilterInput = document.getElementById('jail-filter-custom');
-    
-    let filterValue = filterSelect.value;
-    if (filterValue === 'custom') {
-        filterValue = customFilterInput.value.trim();
-        if (!filterValue) {
-            alert('Please specify a custom filter name');
-            return;
-        }
-    }
-
-    const formData = {
-        name: document.getElementById('jail-name').value.trim(),
-        filter: filterValue,
-        logpath: document.getElementById('jail-logpath').value,
-        maxretry: parseInt(document.getElementById('jail-maxretry').value),
-        findtime: parseInt(document.getElementById('jail-findtime').value),
-        bantime: parseInt(document.getElementById('jail-bantime').value),
-        action: document.getElementById('jail-action').value,
-        enabled: document.getElementById('jail-enabled').checked
-    };
-
-    // === AUTOMATIC FIX: Force systemd backend for SSH jails ===
-    // This prevents the "Have not found any log file for sshd jail" error during reload
-    if (formData.filter === 'sshd' || formData.filter === 'sshd2') {
-        // Inject backend = systemd directly into the config
-        // Our backend supports this via custom parameters in jail.local
-        formData.backend = 'systemd';
-    }
-
-    // Basic validation
-    if (!formData.name || !formData.filter || !formData.logpath) {
-        alert('Please fill in all required fields: Name, Filter, and Log Path');
-        return;
-    }
-
-    // Show loading indicator instantly - smaller centered block
-    const loadingDiv = document.createElement('div');
-    loadingDiv.id = 'jail-loading-overlay';
-    loadingDiv.style.cssText = `
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: 300px !important;
-        min-height: 150px !important;
-        background: rgba(0, 0, 0, 0.85) !important;
-        color: white !important;
-        padding: 25px !important;
-        border-radius: 12px !important;
-        font-family: Arial, sans-serif !important;
-        font-size: 16px !important;
-        font-weight: bold !important;
-        z-index: 10000 !important;
-        text-align: center !important;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
-        backdrop-filter: blur(10px) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    `;
-    loadingDiv.innerHTML = `
-        <div style="margin-bottom: 15px; font-size: 24px;">⚙️</div>
-        <div style="font-size: 18px; margin-bottom: 8px;">Creating Jail Configuration</div>
-        <div style="font-size: 14px; opacity: 0.8;">Writing and activating ${formData.name}...</div>
-        <div style="margin-top: 10px; font-size: 12px; opacity: 0.6;">Please wait</div>
-    `;
-    document.body.appendChild(loadingDiv);
-
-    authenticatedFetch('/api/jails/config', {
-        method: 'POST',
-        body: JSON.stringify(formData)
-    })
-    .then(data => {
-        // Remove loading indicator
-        if (document.body.contains(loadingDiv)) {
-            document.body.removeChild(loadingDiv);
-        }
-        
-        if (data.status === 'success') {
-            alert('Jail configuration saved successfully!\n\n' +
-                  (data.jail_active 
-                         ? '✅ Jail started and is now active!' 
-                         : '⚠️ Config saved. Jail will activate on next reload.'));
-            clearJailForm();
-            loadJailConfigs();
-            renderJailList(); // Refresh active jails
-            fetchJails();     // Refresh main jails view
-        } else {
-            alert('Error saving jail: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        // Remove loading indicator on error too
-        if (document.body.contains(loadingDiv)) {
-            document.body.removeChild(loadingDiv);
-        }
-        
-        console.error('Error saving jail config:', error);
-        if (error.message !== 'Authentication failed' && error.message !== 'No token') {
-            alert('Network error while saving jail configuration: ' + error.message);
-        }
-    });
-
-}
-
-function clearJailForm() {
-    document.getElementById('jail-form').reset();
-    document.getElementById('jail-enabled').checked = true;
-}
-
-function loadJailConfigs() {
-    const token = getToken();
-    if (!token) {
-        window.location.href = '/login.html';
-        return;
-    }
-    
-    fetch('/api/jails/config', {
-        headers: {
-            'Authorization': 'Bearer ' + token
-        }
-    })
-    .then(response => {
-        if (response.status === 401) {
-            localStorage.removeItem('token');
-            window.location.href = '/login.html';
-            return Promise.reject(new Error('Authentication failed'));
-        }
-        if (!response.ok) {
-            return response.json().then(data => {
-                throw new Error(data.error || `HTTP error! status: ${response.status}`);
-            }).catch(() => {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            });
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (!data) {
-            return;
-        }
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        if (data.jails) {
-            renderJailConfigs(data.jails);
-        }
-    })
-    .catch(error => {
-        console.error('Error loading jail configs:', error);
-        if (error.message !== 'Authentication failed') {
-            // Show error to user if it's not an auth error
-            alert('Error loading jail configurations: ' + error.message);
-        }
-    });
-}
-
-function renderJailConfigs(jails) {
-    const container = document.getElementById('jail-config-list');
-    container.innerHTML = '';
-    
-    if (jails.length === 0) {
-        container.innerHTML = '<p>No jail configurations found.</p>';
-        return;
-    }
-    
-    jails.forEach(jail => {
-        const jailItem = document.createElement('div');
-        jailItem.className = 'jail-config-item' + (jail.enabled ? '' : ' disabled');
-        
-        jailItem.innerHTML = `
-            <div class="jail-config-header">
-                <span class="jail-config-name">${jail.name}</span>
-                <span class="jail-config-status ${jail.enabled ? 'enabled' : 'disabled'}">
-                    ${jail.enabled ? 'Enabled' : 'Disabled'}
-                </span>
-            </div>
-            <div class="jail-config-details">
-                <div><strong>Filter:</strong> ${jail.filter}</div>
-                <div><strong>Log Path:</strong> ${jail.logpath}</div>
-                <div><strong>Max Retry:</strong> ${jail.maxretry}</div>
-                <div><strong>Find Time:</strong> ${jail.findtime}s</div>
-                <div><strong>Ban Time:</strong> ${jail.bantime}s</div>
-                ${jail.action ? `<div><strong>Action:</strong> ${jail.action}</div>` : ''}
-            </div>
-            <div class="jail-config-actions">
-                <button class="jail-action-btn edit" onclick="editJail('${jail.name}')">Edit</button>
-                <button class="jail-action-btn ${jail.enabled ? 'stop' : 'start'}" 
-                        onclick="toggleJail('${jail.name}', ${jail.enabled})">
-                    ${jail.enabled ? 'Stop' : 'Start'}
-                </button>
-                <button class="jail-action-btn delete" onclick="deleteJail('${jail.name}')">Delete</button>
-            </div>
-        `;
-        
-        container.appendChild(jailItem);
-    });
-}
-
-function editJail(jailName) {
-    fetch('/api/jails/config', {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        const jail = data.jails.find(j => j.name === jailName);
-        if (jail) {
-            document.getElementById('jail-name').value = jail.name;
-            document.getElementById('jail-filter').value = jail.filter;
-            document.getElementById('jail-logpath').value = jail.logpath;
-            document.getElementById('jail-maxretry').value = jail.maxretry;
-            document.getElementById('jail-findtime').value = jail.findtime;
-            document.getElementById('jail-bantime').value = jail.bantime;
-            document.getElementById('jail-action').value = jail.action || '';
-            document.getElementById('jail-enabled').checked = jail.enabled;
-        }
-    })
-    .catch(error => {
-        console.error('Error loading jail for edit:', error);
-    });
-}
-
-function toggleJail(jailName, currentlyEnabled) {
-    const action = currentlyEnabled ? 'stop' : 'start';
-    
-    fetch(`/api/jails/${jailName}/${action}`, {
-        method: 'POST',
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            loadJailConfigs();
-            renderJailList(); // Refresh active jails
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error(`Error ${action}ing jail:`, error);
-        alert(`Error ${action}ing jail`);
-    });
-}
-
-function deleteJailConfig(jailName) {
-    if (!confirm(`Are you sure you want to delete jail ${jailName}? This will stop the jail and remove its configuration.`)) return;
-    
-    // Show instant loading indicator - smaller centered block
-    const loadingDiv = document.createElement('div');
-    loadingDiv.id = 'jail-delete-loading-overlay';
-    loadingDiv.style.cssText = `
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: 300px !important;
-        min-height: 120px !important;
-        background: rgba(0, 0, 0, 0.85) !important;
-        color: white !important;
-        padding: 20px !important;
-        border-radius: 12px !important;
-        font-family: Arial, sans-serif !important;
-        font-size: 16px !important;
-        font-weight: bold !important;
-        z-index: 10000 !important;
-        text-align: center !important;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
-        backdrop-filter: blur(10px) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    `;
-    loadingDiv.innerHTML = `
-        <div style="margin-bottom: 10px; font-size: 24px;">🗑️</div>
-        <div style="font-size: 16px; margin-bottom: 5px;">Deleting Jail</div>
-        <div style="font-size: 14px; opacity: 0.8;">Stopping and removing ${jailName}...</div>
-        <div style="margin-top: 8px; font-size: 12px; opacity: 0.6;">Please wait</div>
-    `;
-    document.body.appendChild(loadingDiv);
-    
-    const headers = {
-        'Authorization': 'Bearer ' + getToken()
-    };
-
-    fetch(`/api/jails/config/${jailName}`, {
-        method: 'DELETE',
-        headers: headers
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Remove loading indicator
-        if (document.body.contains(loadingDiv)) {
-            document.body.removeChild(loadingDiv);
-        }
-        
-        if (data.status === 'success') {
-            alert(`✅ Jail ${jailName} deleted successfully!`);
-            loadJailConfigs();
-            renderJailList(); // Refresh active jails
-            fetchJails();     // Refresh main jails view
-        } else {
-            alert('Error deleting jail: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        // Remove loading indicator on error too
-        if (document.body.contains(loadingDiv)) {
-            document.body.removeChild(loadingDiv);
-        }
-        
-        alert('Network error while deleting jail');
-    });
-}
-
-function deleteJail(jailName) {
-    if (!confirm(`Are you sure you want to delete the jail "${jailName}"?`)) return;
-    
-    // Show loading indicator instantly - smaller centered block
-    const loadingDiv = document.createElement('div');
-    loadingDiv.id = 'jail-delete-loading-overlay';
-    loadingDiv.style.cssText = `
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: 300px !important;
-        min-height: 120px !important;
-        background: rgba(0, 0, 0, 0.85) !important;
-        color: white !important;
-        padding: 20px !important;
-        border-radius: 12px !important;
-        font-family: Arial, sans-serif !important;
-        font-size: 16px !important;
-        font-weight: bold !important;
-        z-index: 10000 !important;
-        text-align: center !important;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
-        backdrop-filter: blur(10px) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    `;
-    loadingDiv.innerHTML = `
-        <div style="margin-bottom: 10px; font-size: 24px;">🗑️</div>
-        <div style="font-size: 16px; margin-bottom: 5px;">Deleting Jail</div>
-        <div style="font-size: 14px; opacity: 0.8;">Stopping and removing ${jailName}...</div>
-        <div style="margin-top: 8px; font-size: 12px; opacity: 0.6;">Please wait</div>
-    `;
-    document.body.appendChild(loadingDiv);
-
-    fetch(`/api/jails/config/${jailName}`, {
-        method: 'DELETE',
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Remove loading indicator
-        if (document.body.contains(loadingDiv)) {
-            document.body.removeChild(loadingDiv);
-        }
-        
-        if (data.status === 'success') {
-            alert('✅ Jail deleted successfully');
-            loadJailConfigs();
-            renderJailList(); // Refresh active jails
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => {
-        // Remove loading indicator on error too
-        if (document.body.contains(loadingDiv)) {
-            document.body.removeChild(loadingDiv);
-        }
-        
-        console.error('Error deleting jail:', error);
-        alert('Error deleting jail');
-    });
-}
-
-// ... (rest of the code remains the same)
-// Existing functions (modified to work with new structure)
-function renderJailList() {
-    fetch('/api/jails', {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        const container = document.getElementById('jails-list');
-        container.innerHTML = '';
-        
-        if (data.jails && data.jails.length > 0) {
-            data.jails.forEach(jail => {
-                const jailElement = document.createElement('div');
-                jailElement.className = 'jail-item';
-                jailElement.innerHTML = `
-                    <h3>${jail}</h3>
-                    <button onclick="viewBannedIPs('${jail}')">View Banned IPs</button>
-                `;
-                container.appendChild(jailElement);
-            });
-        } else {
-            container.innerHTML = '<p>No active jails found.</p>';
-        }
-    })
-    .catch(error => {
-        console.error('Error loading jails:', error);
-        document.getElementById('jails-list').innerHTML = '<p>Error loading jails.</p>';
-    });
-}
-
-function renderBannedIPs() {
-    fetch('/api/jails', {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.jails && data.jails.length > 0) {
-            // Load banned IPs for the first jail
-            viewBannedIPs(data.jails[0]);
-        } else {
-            document.getElementById('banned-ips').innerHTML = '<p>No jails to display.</p>';
-        }
-    })
-    .catch(error => {
-        console.error('Error loading banned IPs:', error);
-        document.getElementById('banned-ips').innerHTML = '<p>Error loading banned IPs.</p>';
-    });
-}
-
-function viewBannedIPs(jailName) {
-    fetch(`/api/banned/${jailName}`, {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        const container = document.getElementById('banned-ips');
-        container.innerHTML = '';
-        
-        if (data.status) {
-            const { bannedIPs } = parseJailStatus(data.status);
-            
-            if (bannedIPs.length > 0) {
-                const listElement = document.createElement('div');
-                listElement.innerHTML = `<h3>Banned IPs in ${jailName}</h3>`;
-                
-                const table = document.createElement('table');
-                table.className = 'ip-table';
-                table.id = 'ip-table';
-                
-                renderIPTable(table, bannedIPs, jailName);
-                
-                listElement.appendChild(table);
-                container.appendChild(listElement);
-            } else {
-                container.innerHTML = `
-                    <div style="text-align: center; padding: 1rem; margin-top: 1rem; background: #f8f9fa; border-radius: 6px; border: 1px dashed #dee2e6;">
-                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.7;">🛡️</div>
-                        <h4 style="color: #4a5568; margin-bottom: 0.25rem; font-size: 0.9rem;">No Banned IPs</h4>
-                        <p style="color: #718096; margin-bottom: 0.25rem; font-size: 0.8rem;">The jail <strong>${jailName}</strong> has no banned IP addresses.</p>
-                        <p style="color: #a0aec0; font-size: 0.7rem;">All connections are currently allowed for this service.</p>
-                    </div>
-                `;
-            }
-        } else {
-            container.innerHTML = '<p>Error loading banned IPs.</p>';
-        }
-    })
-    .catch(error => {
-        console.error('Error loading banned IPs:', error);
-        document.getElementById('banned-ips').innerHTML = '<p>Error loading banned IPs.</p>';
-    });
-}
-
-function banIP() {
-    const jailSelect = document.createElement('select');
-    // Populate with current jails
-    fetch('/api/jails', {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.jails && data.jails.length > 0) {
-            data.jails.forEach(jail => {
-                const option = document.createElement('option');
-                option.value = jail;
-                option.textContent = jail;
-                jailSelect.appendChild(option);
-            });
-        }
-    });
-    
-    const ip = document.getElementById('ip-to-ban').value;
-    if (!ip) {
-        alert('Please enter an IP address to ban');
-        return;
-    }
-    
-    // For simplicity, use the first available jail
-    fetch('/api/jails', {
-        headers: {
-            'Authorization': 'Bearer ' + getToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.jails && data.jails.length > 0) {
-            const jail = data.jails[0];
-            
-            fetch('/api/ban', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + getToken()
-                },
-                body: JSON.stringify({
-                    jail: jail,
-                    ip: ip
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success' || data.status === 'warning') {
-                    alert(data.message);
-                    document.getElementById('ip-to-ban').value = '';
-                    renderBannedIPs();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error banning IP:', error);
-                alert('Error banning IP');
-            });
-        }
-    });
-}
-
-function unbanIP(jailName, ipAddress) {
-    fetch('/api/unban', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getToken()
-        },
-        body: JSON.stringify({
-            jail: jailName,
-            ip: ipAddress
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            alert('IP unbanned successfully');
-            renderBannedIPs();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error unbanning IP:', error);
-        alert('Error unbanning IP');
-    });
-}
-
-function filterIPs() {
-    const searchTerm = document.getElementById('ip-search').value.toLowerCase();
-    const ipItems = document.querySelectorAll('.ip-item');
-    
-    ipItems.forEach(item => {
-        const ipText = item.textContent.toLowerCase();
-        if (ipText.includes(searchTerm)) {
-            item.style.display = 'block';
-        } else {
-            item.style.display = 'none';
-        }
-    });
-}
-
-// Utility functions
+// ============================================================
+// Auth utilities (unchanged contract with backend)
+// ============================================================
 function getToken() {
     return localStorage.getItem('token') || document.cookie.replace(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
 }
@@ -1044,20 +88,19 @@ function logout() {
     window.location.replace('/login.html');
 }
 
-// Helper function for authenticated API calls
 function authenticatedFetch(url, options = {}) {
     const token = getToken();
     if (!token) {
         window.location.href = '/login.html';
         return Promise.reject(new Error('No token'));
     }
-    
+
     const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         ...options.headers
     };
-    
+
     return fetch(url, { ...options, headers })
         .then(response => {
             if (response.status === 401) {
@@ -1082,51 +125,93 @@ function authenticatedFetch(url, options = {}) {
         });
 }
 
-// Check authentication on page load — reveal only after check (pairs with auth-pending gate in index.html)
-document.addEventListener('DOMContentLoaded', function() {
-    const token = getToken();
-    const reveal = () => { document.documentElement.classList.remove('auth-pending'); document.body.classList.add('auth-ready'); };
-    const goLogin = () => window.location.replace('/login.html');
-    if (!token) { goLogin(); return; }
+// ============================================================
+// View switching (sidebar navigation)
+// ============================================================
+const VIEW_META = {
+    jails: { title: 'Active Jails', sub: 'Live status of all fail2ban jails' },
+    banned: { title: 'Banned IPs', sub: 'Inspect, search and manage banned addresses' },
+    config: { title: 'Configuration', sub: 'Jails, filters and ignore lists' },
+};
 
-    fetch('/api/verify-token', {
-        headers: { 'Authorization': 'Bearer ' + token }
-    })
-    .then(response => {
-        if (response.status === 401) {
-            localStorage.removeItem('token');
-            goLogin();
-            return Promise.reject(new Error('Token verification failed'));
-        }
-        if (!response.ok) {
-            return Promise.reject(new Error(`Token verification failed: ${response.status}`));
-        }
-        return response.json();
-    })
-    .then(data => { reveal(); })
-    .catch(error => {
-        if (error.message === 'Token verification failed') return;
-        // Network/server error: still reveal — let subsequent API calls decide, don't strand on blank screen
-        reveal();
-    });
-});
+function switchView(name) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === name));
+    const view = document.getElementById('view-' + name);
+    if (view) view.classList.add('active');
+    const meta = VIEW_META[name] || VIEW_META.jails;
+    document.getElementById('page-title').textContent = meta.title;
+    document.getElementById('page-subtitle').textContent = meta.sub;
+    closeSidebar();
+}
 
+function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebar-scrim').classList.add('show');
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-scrim').classList.remove('show');
+}
+
+// showJailConfig / hideJailConfig keep their old names — they now just switch views
+function showJailConfig() {
+    switchView('config');
+    loadJailConfigs();
+    loadIgnoreIP();
+    populateFilterOptions();
+}
+
+function hideJailConfig() {
+    switchView('jails');
+    fetchJails();
+}
+
+// ============================================================
+// Health status (unauthenticated /api/health)
+// ============================================================
+function checkHealth() {
+    const dot = document.getElementById('hc-dot');
+    const text = document.getElementById('hc-text');
+    const pill = document.getElementById('health-pill');
+    const pillText = document.getElementById('health-pill-text');
+    const time = document.getElementById('hc-time');
+    if (!dot) return;
+
+    fetch('/api/health')
+        .then(r => r.json().then(d => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+            const healthy = ok && d.status === 'healthy';
+            dot.className = 'hc-dot ' + (healthy ? 'ok' : 'bad');
+            text.textContent = healthy ? 'fail2ban connected' : 'fail2ban unreachable';
+            pill.className = 'pill ' + (healthy ? 'ok' : 'bad');
+            pillText.textContent = healthy ? 'Operational' : 'Engine down';
+            if (d.timestamp && time) {
+                time.textContent = new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+        })
+        .catch(() => {
+            dot.className = 'hc-dot bad';
+            text.textContent = 'Backend unreachable';
+            pill.className = 'pill bad';
+            pillText.textContent = 'Backend down';
+        });
+}
+
+// ============================================================
+// Jails view — cards with live banned counts
+// ============================================================
 function fetchJails() {
     const token = getToken();
     if (!token) {
         window.location.href = '/login.html';
         return;
     }
-    
-    const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-    };
-    
-    fetch('/api/jails', { headers })
+
+    fetch('/api/jails', { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } })
         .then(response => {
             if (response.status === 401) {
-                // Token expired or invalid
                 localStorage.removeItem('token');
                 window.location.href = '/login.html';
                 return Promise.reject(new Error('Authentication failed'));
@@ -1141,244 +226,933 @@ function fetchJails() {
             return response.json();
         })
         .then(data => {
-            if (!data) {
-                // Response was handled (e.g., redirect)
-                return;
-            }
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            
-            const jailsList = document.getElementById('jails-list');
-            if (!Array.isArray(data.jails) || data.jails.length === 0) {
-                jailsList.innerHTML = '<p>No active jails found</p>';
-                return;
-            }
+            if (!data) return;
+            if (data.error) throw new Error(data.error);
 
-            const table = document.createElement('table');
-            table.className = 'jails-table';
-            const tbody = document.createElement('tbody');
-            
-            // Capture selection BEFORE rebuilding DOM — innerHTML wipe destroys checked state
-            const selectedJail = document.querySelector('input[name="jail-selection"]:checked')?.value;
-            
-            // Calculate number of columns based on window width
-            const windowWidth = window.innerWidth;
-            const columns = windowWidth > 1200 ? 4 : windowWidth > 768 ? 3 : windowWidth > 480 ? 2 : 1;
-            
-            // Create rows
-            for (let i = 0; i < data.jails.length; i += columns) {
-                const row = document.createElement('tr');
-                for (let j = 0; j < columns; j++) {
-                    if (i + j < data.jails.length) {
-                        const jail = data.jails[i + j];
-                        const cell = document.createElement('td');
-                        cell.innerHTML = `
-                            <div class="jail-cell">
-                                <input type="radio" 
-                                       id="jail-${jail}" 
-                                       name="jail-selection" 
-                                       value="${jail}"
-                                       onchange="handleJailSelection('${jail}')">
-                                <label for="jail-${jail}">${jail}</label>
-                            </div>
-                        `;
-                        row.appendChild(cell);
-                    }
-                }
-                tbody.appendChild(row);
-            }
-            
-            table.appendChild(tbody);
-            jailsList.innerHTML = '';
-            jailsList.appendChild(table);
-            
-            // Preserve user selection across 30s refreshes — only default to first jail on initial load
-            const jailToSelect = (selectedJail && data.jails.includes(selectedJail)) ? selectedJail : data.jails[0];
-            if (jailToSelect) {
-                const radio = document.getElementById(`jail-${jailToSelect}`);
-                if (radio) {
-                    radio.checked = true;
-                    radio.closest('.jail-cell').classList.add('active');
-                    fetchJailDetails(jailToSelect);
-                }
-            }
+            currentJails = Array.isArray(data.jails) ? data.jails : [];
+            renderJailGrid();
+            refreshBannedCounts();
         })
         .catch(error => {
             console.error('Error fetching jails:', error);
             if (error.message !== 'Authentication failed') {
-                document.getElementById('jails-list').innerHTML = 
-                    `<div class="error-message">Error: ${error.message}</div>`;
+                const list = document.getElementById('jails-list');
+                if (list) list.innerHTML = `<div class="empty"><div class="e-icon" style="background:var(--danger-soft);color:var(--danger)">${ICONS.warn}</div><h4>Unable to load jails</h4><p>${escapeHtml(error.message)}<br>Check that fail2ban is running and the socket is shared.</p></div>`;
             }
         });
 }
 
-// Make handleJailSelection available globally
-window.handleJailSelection = function(jail) {
-    // Remove active class from all cells
-    document.querySelectorAll('.jail-cell').forEach(cell => {
-        cell.classList.remove('active');
-    });
-    
-    // Add active class to selected cell
-    const selectedInput = document.getElementById(`jail-${jail}`);
-    if (selectedInput) {
-        selectedInput.closest('.jail-cell').classList.add('active');
-    }
-    
-    // Fetch jail details
-    fetchJailDetails(jail);
-};
+function jailAvatarColor(name) {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
 
-window.fetchJailDetails = function(jail) {
+function renderJailGrid() {
+    const container = document.getElementById('jails-list');
+    if (!container) return;
+
+    if (currentJails.length === 0) {
+        container.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="e-icon">${ICONS.shield}</div><h4>No active jails</h4><p>No jails are currently running. Create one from the Configuration page.</p><div style="margin-top:14px"><button class="btn btn-primary btn-sm" onclick="showJailConfig()">Open Configuration</button></div></div>`;
+        updateStats(0, 0);
+        return;
+    }
+
+    container.innerHTML = '';
+    currentJails.forEach(jail => {
+        const info = jailBannedCounts[jail];
+        const count = info ? info.ips.length : null;
+        const card = document.createElement('div');
+        card.className = 'jail-card' + (jail === selectedJail ? ' selected' : '');
+        card.id = `jail-card-${jail}`;
+        card.onclick = () => selectJail(jail);
+        card.innerHTML = `
+            <div class="jc-top">
+                <div class="jc-avatar" style="background:${jailAvatarColor(jail)}">${escapeHtml(jail.slice(0, 2).toUpperCase())}</div>
+                <div style="min-width:0">
+                    <div class="jc-name">${escapeHtml(jail)}</div>
+                    <div class="jc-meta">fail2ban jail</div>
+                </div>
+                <div class="jc-count">
+                    <b data-count>${count === null ? '…' : count}</b>
+                    <span>banned</span>
+                </div>
+            </div>
+            <div class="jc-bottom">
+                <span class="badge green"><span class="dot"></span>Active</span>
+                <div class="spacer"></div>
+                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewBannedIPs('${jail}')">Banned IPs</button>
+                <button class="btn btn-icon btn-ghost" title="Stop jail" onclick="event.stopPropagation();toggleJail('${jail}', true)">${ICONS.stop}</button>
+            </div>`;
+        container.appendChild(card);
+    });
+}
+
+function updateStats(totalBanned, totalSubnets) {
+    const sj = document.getElementById('stat-jails');
+    if (!sj) return;
+    sj.textContent = currentJails.length;
+    document.getElementById('stat-banned').textContent = totalBanned;
+    document.getElementById('stat-subnets').textContent = totalSubnets;
+    const nb = document.getElementById('nav-badge-jails');
+    if (nb) nb.textContent = currentJails.length;
+    const nbb = document.getElementById('nav-badge-banned');
+    if (nbb) nbb.textContent = totalBanned;
+}
+
+// Fetch banned lists for every jail in parallel → counts for cards & stats
+function refreshBannedCounts() {
+    if (currentJails.length === 0) { updateStats(0, 0); return; }
     const token = getToken();
-    const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-    };
-    
+    const headers = { 'Authorization': `Bearer ${token}` };
+    Promise.all(currentJails.map(jail =>
+        fetch(`/api/banned/${jail}`, { headers })
+            .then(r => r.ok ? r.json() : { status: '' })
+            .then(d => ({ jail, d }))
+            .catch(() => ({ jail, d: { status: '' } }))
+    )).then(results => {
+        let total = 0, subnets = 0;
+        results.forEach(({ jail, d }) => {
+            const { bannedIPs } = parseJailStatus(d.status || '');
+            jailBannedCounts[jail] = { ips: bannedIPs };
+            total += bannedIPs.length;
+            subnets += bannedIPs.filter(isSubnet).length;
+        });
+        updateStats(total, subnets);
+        // update counts on cards without a full re-render
+        currentJails.forEach(jail => {
+            const card = document.getElementById(`jail-card-${jail}`);
+            if (card) {
+                const b = card.querySelector('[data-count]');
+                if (b) b.textContent = (jailBannedCounts[jail] || { ips: [] }).ips.length;
+            }
+        });
+    });
+}
+
+function selectJail(jail) {
+    selectedJail = jail;
+    document.querySelectorAll('.jail-card').forEach(c => c.classList.toggle('selected', c.id === `jail-card-${jail}`));
+    switchView('banned');
+    fetchJailDetails(jail);
+}
+
+// ============================================================
+// Banned IPs view
+// ============================================================
+function renderJailSwitcher() {
+    const wrap = document.getElementById('jail-switcher');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (currentJails.length === 0) return;
+    const label = document.createElement('span');
+    label.className = 'badge gray';
+    label.textContent = 'Jail:';
+    wrap.appendChild(label);
+    currentJails.forEach(jail => {
+        const b = document.createElement('button');
+        b.className = 'btn btn-sm ' + (jail === selectedJail ? 'btn-primary' : 'btn-outline');
+        b.textContent = jail;
+        b.onclick = () => { selectedJail = jail; renderJailSwitcher(); fetchJailDetails(jail); };
+        wrap.appendChild(b);
+    });
+}
+
+function renderBanJailSelect() {
+    const sel = document.getElementById('ban-jail-select');
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '';
+    currentJails.forEach(jail => {
+        const o = document.createElement('option');
+        o.value = jail;
+        o.textContent = jail;
+        sel.appendChild(o);
+    });
+    // default: selected jail if present, else previous choice, else first jail
+    if (selectedJail && currentJails.includes(selectedJail)) sel.value = selectedJail;
+    else if (prev && currentJails.includes(prev)) sel.value = prev;
+}
+
+function viewBannedIPs(jailName) {
+    selectedJail = jailName;
+    switchView('banned');
+    fetchJailDetails(jailName);
+}
+
+function fetchJailDetails(jail) {
+    const token = getToken();
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    renderJailSwitcher();
+    renderBanJailSelect();
+    const sub = document.getElementById('banned-sub');
+    if (sub) sub.textContent = `Banned addresses in jail “${jail}”`;
+
     fetch(`/api/banned/${jail}`, { headers })
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/login.html';
+                return Promise.reject(new Error('Authentication failed'));
+            }
+            return response.json();
+        })
         .then(data => {
             const bannedIPsContainer = document.getElementById('banned-ips');
-            const { bannedIPs } = parseJailStatus(data.status);
-            
+            const { bannedIPs } = parseJailStatus(data.status || '');
+            jailBannedCounts[jail] = { ips: bannedIPs };
+
             if (bannedIPs.length > 0) {
                 bannedIPsContainer.innerHTML = `
-                    <table class="ip-table" id="ip-table"></table>
-                `;
+                    <div class="table-wrap">
+                        <table class="data" id="ip-table">
+                            <thead><tr><th>Address</th><th>Type</th><th style="text-align:right">Actions</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>`;
                 renderIPTable(document.getElementById('ip-table'), bannedIPs, jail);
             } else {
                 bannedIPsContainer.innerHTML = `
-                    <div style="text-align: center; padding: 1rem; margin-top: 1rem; background: #f8f9fa; border-radius: 6px; border: 1px dashed #dee2e6;">
-                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.7;">🛡️</div>
-                        <h4 style="color: #4a5568; margin-bottom: 0.25rem; font-size: 0.9rem;">No Banned IPs</h4>
-                        <p style="color: #718096; margin-bottom: 0.25rem; font-size: 0.8rem;">The jail <strong>${jail}</strong> has no banned IP addresses.</p>
-                        <p style="color: #a0aec0; font-size: 0.7rem;">All connections are currently allowed for this service.</p>
-                    </div>
-                `;
+                    <div class="empty">
+                        <div class="e-icon" style="background:var(--success-soft);color:var(--success)">${ICONS.shield}</div>
+                        <h4>No Banned IPs</h4>
+                        <p>The jail <strong>${escapeHtml(jail)}</strong> has no banned IP addresses. All connections are currently allowed for this service.</p>
+                    </div>`;
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            document.getElementById('banned-ips').innerHTML = 
-                `<div class="error-message">Error fetching jail details</div>`;
+            document.getElementById('banned-ips').innerHTML =
+                `<div class="empty"><div class="e-icon" style="background:var(--danger-soft);color:var(--danger)">${ICONS.warn}</div><h4>Error</h4><p>Failed to fetch jail details: ${escapeHtml(error.message)}</p></div>`;
         });
-};
+}
 
-// Update unbanIP to use headers
-window.unbanIP = function(jail, ip) {
-    if (!confirm(`Are you sure you want to unban ${ip} from ${jail}?`)) return;
+window.fetchJailDetails = fetchJailDetails;
 
-    const token = getToken();
-    const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-    };
+function isSubnet(ip) {
+    return ip.includes('/');
+}
 
-    fetch('/api/unban', {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ jail, ip })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) throw new Error(data.error);
-        // Refresh the jail details after successful unban
-        fetchJailDetails(jail);
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert(`Failed to unban IP: ${error.message}`);
+function ipTypeLabel(ip) {
+    if (isSubnet(ip)) return 'Subnet';
+    return ip.includes(':') ? 'IPv6' : 'IPv4';
+}
+
+function renderIPTable(table, ips, jail) {
+    const tbody = table.querySelector('tbody') || document.createElement('tbody');
+    tbody.innerHTML = '';
+    ips.forEach(ip => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><span class="ip-mono ip-cell">${escapeHtml(ip)}</span></td>
+            <td><span class="badge ${isSubnet(ip) ? 'violet' : 'indigo'}">${ipTypeLabel(ip)}</span></td>
+            <td>
+                <div class="row-actions">
+                    <button class="btn btn-icon btn-ghost" title="Unban ${escapeHtml(ip)}" onclick="unbanIP('${jail}', '${ip}')">${ICONS.ban}</button>
+                </div>
+            </td>`;
+        tbody.appendChild(tr);
+    });
+    if (!table.querySelector('tbody')) table.appendChild(tbody);
+    // keep an active search applied across re-renders (jail switch / auto-refresh)
+    window.filterIPs();
+}
+
+window.filterIPs = function () {
+    const searchInput = document.getElementById('ip-search');
+    const filter = searchInput.value.toLowerCase();
+    const cells = document.querySelectorAll('#banned-ips .ip-cell');
+    cells.forEach(cell => {
+        const ip = cell.textContent;
+        const tr = cell.closest('tr');
+        if (tr) tr.style.display = ip.toLowerCase().includes(filter) ? '' : 'none';
     });
 };
 
-// Initialize inactivity timer
+// ---------- Ban / unban ----------
+window.banIP = function () {
+    const ip = document.getElementById('ip-to-ban').value.trim();
+    if (!ip) {
+        toast('warning', 'Please enter an IP address or CIDR to ban');
+        return;
+    }
+    const jail = document.getElementById('ban-jail-select').value || currentJails[0];
+    if (!jail) {
+        toast('error', 'No active jail available to ban into');
+        return;
+    }
+
+    showBusy('Banning address', `${ip} → ${jail}`);
+    authenticatedFetch('/api/ban', {
+        method: 'POST',
+        body: JSON.stringify({ jail: jail, ip: ip })
+    })
+        .then(data => {
+            hideBusy();
+            toast(data.status === 'warning' ? 'warning' : 'success', data.message);
+            document.getElementById('ip-to-ban').value = '';
+            fetchJailDetails(jail);
+            refreshBannedCounts();
+        })
+        .catch(error => {
+            hideBusy();
+            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                toast('error', 'Ban failed: ' + error.message);
+            }
+        });
+};
+
+window.unbanIP = function (jail, ip) {
+    showConfirm('Unban address?', `Are you sure you want to unban ${ip} from jail ${jail}?`)
+        .then(ok => {
+            if (!ok) return;
+            showBusy('Unbanning address', `${ip} from ${jail}`);
+            return authenticatedFetch('/api/unban', {
+                method: 'POST',
+                body: JSON.stringify({ jail: jail, ip: ip })
+            })
+                .then(() => {
+                    hideBusy();
+                    toast('success', `IP ${ip} unbanned from ${jail}`);
+                    fetchJailDetails(jail);
+                    refreshBannedCounts();
+                })
+                .catch(error => {
+                    hideBusy();
+                    if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                        toast('error', `Failed to unban IP: ${error.message}`);
+                    }
+                });
+        });
+};
+
+// ============================================================
+// Status parsing (unchanged)
+// ============================================================
+function parseJailStatus(statusText) {
+    const bannedIPsMatch = statusText.match(/Banned IP list:\t(.+)$/);
+    if (!bannedIPsMatch) return { bannedIPs: [] };
+    const bannedIPs = bannedIPsMatch[1].split(' ').filter(ip => ip.trim());
+    return { bannedIPs };
+}
+
+// ============================================================
+// Configuration — filter picker
+// ============================================================
+const FILTERS = [
+    { value: 'sshd', text: 'SSH (sshd)' },
+    { value: 'sshd2', text: 'SSH Enhanced (sshd2)' },
+    { value: 'nginx', text: 'Nginx (nginx)' },
+    { value: 'auth', text: 'Nginx Auth (auth)' },
+    { value: 'apache-auth', text: 'Apache Auth (apache-auth)' },
+    { value: 'apache-badbots', text: 'Apache Bad Bots (apache-badbots)' },
+    { value: 'apache-botsearch', text: 'Apache Bot Search (apache-botsearch)' },
+    { value: 'apache-common', text: 'Apache Common (apache-common)' },
+    { value: 'apache-fakegooglebot', text: 'Apache Fake Googlebot (apache-fakegooglebot)' },
+    { value: 'apache-modsecurity', text: 'Apache ModSecurity (apache-modsecurity)' },
+    { value: 'apache-nohome', text: 'Apache No Home (apache-nohome)' },
+    { value: 'apache-noscript', text: 'Apache No Script (apache-noscript)' },
+    { value: 'apache-overflows', text: 'Apache Overflows (apache-overflows)' },
+    { value: 'apache-pass', text: 'Apache Pass (apache-pass)' },
+    { value: 'apache-shellshock', text: 'Apache Shellshock (apache-shellshock)' },
+    { value: 'vsftpd', text: 'VSFTPD (vsftpd)' },
+    { value: 'proftpd', text: 'ProFTPD (proftpd)' },
+    { value: 'pure-ftpd', text: 'Pure-FTPd (pure-ftpd)' },
+    { value: 'wuftpd', text: 'WU-FTPd (wuftpd)' },
+    { value: 'postfix', text: 'Postfix (postfix)' },
+    { value: 'sendmail-auth', text: 'Sendmail Auth (sendmail-auth)' },
+    { value: 'sendmail-reject', text: 'Sendmail Reject (sendmail-reject)' },
+    { value: 'exim', text: 'Exim (exim)' },
+    { value: 'dovecot', text: 'Dovecot (dovecot)' },
+    { value: 'sieve', text: 'Sieve (sieve)' },
+    { value: 'solid-pop3d', text: 'Solid POP3d (solid-pop3d)' },
+    { value: 'courier-auth', text: 'Courier Auth (courier-auth)' },
+    { value: 'courier-smtp', text: 'Courier SMTP (courier-smtp)' },
+    { value: 'named', text: 'BIND9 (named)' },
+    { value: 'recidive', text: 'Recidive (recidive)' },
+    { value: 'murmur', text: 'Mumble (murmur)' },
+    { value: 'asterisk', text: 'Asterisk (asterisk)' },
+    { value: 'freeswitch', text: 'FreeSWITCH (freeswitch)' },
+    { value: 'mysqld', text: 'MySQL (mysqld)' },
+    { value: 'mysqld-auth', text: 'MySQL Auth (mysqld-auth)' },
+    { value: 'oracle', text: 'Oracle (oracle)' },
+    { value: 'php-url-fopen', text: 'PHP URL Fopen (php-url-fopen)' },
+    { value: 'roundcube-auth', text: 'Roundcube Auth (roundcube-auth)' },
+    { value: 'openwebmail', text: 'OpenWebMail (openwebmail)' },
+    { value: 'horde', text: 'Horde (horde)' },
+    { value: 'groupoffice', text: 'GroupOffice (groupoffice)' },
+    { value: 'sogo', text: 'SOGo (sogo)' },
+    { value: 'tomcat', text: 'Tomcat (tomcat)' },
+    { value: 'monit', text: 'Monit (monit)' },
+    { value: 'webmin', text: 'Webmin (webmin)' },
+    { value: 'drupal-auth', text: 'Drupal Auth (drupal-auth)' },
+    { value: 'magento', text: 'Magento (magento)' },
+    { value: 'wordpress', text: 'WordPress (wordpress)' },
+    { value: 'phpmyadmin', text: 'phpMyAdmin (phpmyadmin)' },
+    { value: 'guacamole', text: 'Guacamole (guacamole)' },
+    { value: 'slapd', text: 'OpenLDAP (slapd)' },
+    { value: 'directadmin', text: 'DirectAdmin (directadmin)' },
+    { value: 'iptables', text: 'iptables (iptables)' },
+    { value: 'nginx-http-auth', text: 'Nginx HTTP Auth (nginx-http-auth)' },
+    { value: 'nginx-limit-req', text: 'Nginx Limit Requests (nginx-limit-req)' },
+    { value: 'nginx-botsearch', text: 'Nginx Bot Search (nginx-botsearch)' },
+];
+
+function populateFilterOptions() {
+    const list = document.getElementById('filter-list');
+    if (!list || list.dataset.built === '1') { filterFilterList(); return; }
+    list.dataset.built = '1';
+    list.innerHTML = '';
+    FILTERS.forEach(f => {
+        const row = document.createElement('div');
+        row.className = 'filter-row';
+        row.dataset.value = f.value;
+        row.dataset.text = f.text.toLowerCase();
+        row.innerHTML = `<span class="fname">${f.value}</span><span class="fdesc">${escapeHtml(f.text.replace(/\s*\(.*\)$/, ''))}</span>`;
+        row.onclick = () => onFilterChange(f.value);
+        list.appendChild(row);
+    });
+    filterFilterList();
+}
+
+function filterFilterList() {
+    const q = (document.getElementById('filter-search').value || '').toLowerCase();
+    document.querySelectorAll('#filter-list .filter-row').forEach(row => {
+        row.style.display = (row.dataset.text.includes(q) || row.dataset.value.includes(q)) ? '' : 'none';
+    });
+}
+
+function setFilterSelectedUI(value) {
+    selectedFilter = value || '';
+    document.querySelectorAll('#filter-list .filter-row').forEach(row => {
+        const on = row.dataset.value === selectedFilter;
+        row.style.borderColor = on ? 'var(--primary)' : '';
+        row.style.background = on ? 'var(--primary-soft)' : '';
+    });
+}
+
+function onFilterChange(filterValue) {
+    const customFilterInput = document.getElementById('jail-filter-custom');
+    const filterContent = document.getElementById('filter-content');
+    const jailName = document.getElementById('jail-name');
+    const logpathInput = document.getElementById('jail-logpath');
+
+    if (!filterValue) {
+        customFilterInput.value = '';
+        filterContent.style.display = 'none';
+        jailName.value = '';
+        logpathInput.value = '';
+        resetToDefaults();
+        setFilterSelectedUI('');
+        document.getElementById('jail-filter').value = '';
+        return;
+    }
+
+    // Clear custom text when a known filter is chosen
+    customFilterInput.value = '';
+    setFilterSelectedUI(filterValue);
+    document.getElementById('jail-filter').value = filterValue;
+    setFilterDefaults(filterValue);
+    loadFilterContent(filterValue);
+}
+
+function setFilterDefaults(filterValue) {
+    const jailName = document.getElementById('jail-name');
+    const logpathInput = document.getElementById('jail-logpath');
+
+    const filterDefaults = {
+        'sshd': { name: 'sshd', logpath: '%(syslog_authpriv)s', maxretry: 3, findtime: 3600, bantime: 60000 },
+        'sshd2': { name: 'sshd2', logpath: '%(syslog_authpriv)s', maxretry: 3, findtime: 1800, bantime: 60000 },
+        'nginx': { name: 'nginx', logpath: '/var/log/nginx/access.log', maxretry: 5, findtime: 600, bantime: 60000 },
+        'auth': { name: 'auth', logpath: '/var/log/nginx/access.log', maxretry: 5, findtime: 600, bantime: 60000 },
+        'apache-auth': { name: 'apache-auth', logpath: '/var/log/apache2/error.log', maxretry: 3, findtime: 600, bantime: 60000 },
+        'postfix': { name: 'postfix', logpath: '/var/log/mail.log', maxretry: 5, findtime: 600, bantime: 180000 },
+        'dovecot': { name: 'dovecot', logpath: '/var/log/dovecot.log', maxretry: 5, findtime: 300, bantime: 90000 },
+        'vsftpd': { name: 'vsftpd', logpath: '/var/log/vsftpd.log', maxretry: 3, findtime: 600, bantime: 180000 },
+        'mysqld': { name: 'mysqld', logpath: '/var/log/mysql/error.log', maxretry: 3, findtime: 600, bantime: 120000 }
+    };
+
+    const defaults = filterDefaults[filterValue] || {
+        name: filterValue,
+        logpath: '/var/log/' + filterValue + '.log',
+        maxretry: 3,
+        findtime: 3600,
+        bantime: 60000
+    };
+
+    jailName.value = defaults.name;
+    logpathInput.value = defaults.logpath;
+    document.getElementById('jail-maxretry').value = defaults.maxretry;
+    document.getElementById('jail-findtime').value = defaults.findtime;
+    document.getElementById('jail-bantime').value = defaults.bantime;
+}
+
+function resetToDefaults() {
+    document.getElementById('jail-maxretry').value = 3;
+    document.getElementById('jail-findtime').value = 3600;
+    document.getElementById('jail-bantime').value = 60000;
+    document.getElementById('jail-action').value = '';
+    document.getElementById('jail-enabled').checked = true;
+}
+
+function loadFilterContent(filterName) {
+    authenticatedFetch(`/api/filters/${filterName}`)
+        .then(data => {
+            const filterContent = document.getElementById('filter-content');
+            const filterRegex = document.getElementById('filter-regex');
+            if (data.status === 'success') {
+                filterRegex.textContent = data.content;
+                filterContent.style.display = 'block';
+            } else {
+                filterContent.style.display = 'none';
+            }
+        })
+        .catch(() => {
+            document.getElementById('filter-content').style.display = 'none';
+        });
+}
+
+// ============================================================
+// Configuration — jail create/edit form
+// ============================================================
+function clearJailForm() {
+    document.getElementById('jail-form').reset();
+    document.getElementById('jail-enabled').checked = true;
+    document.getElementById('filter-content').style.display = 'none';
+    document.getElementById('jail-filter-custom').value = '';
+    document.getElementById('jail-filter').value = '';
+    setFilterSelectedUI('');
+    document.getElementById('jail-form-title').textContent = 'Create Jail';
+}
+
+function handleJailFormSubmit(event) {
+    event.preventDefault();
+
+    const customFilter = document.getElementById('jail-filter-custom').value.trim();
+    const filterValue = customFilter || document.getElementById('jail-filter').value;
+    if (!filterValue) {
+        toast('warning', 'Please select a filter (or type a custom filter name)');
+        return;
+    }
+
+    const formData = {
+        name: document.getElementById('jail-name').value.trim(),
+        filter: filterValue,
+        logpath: document.getElementById('jail-logpath').value,
+        maxretry: parseInt(document.getElementById('jail-maxretry').value),
+        findtime: parseInt(document.getElementById('jail-findtime').value),
+        bantime: parseInt(document.getElementById('jail-bantime').value),
+        action: document.getElementById('jail-action').value,
+        enabled: document.getElementById('jail-enabled').checked
+    };
+
+    // === AUTOMATIC FIX: Force systemd backend for SSH jails ===
+    if (formData.filter === 'sshd' || formData.filter === 'sshd2') {
+        formData.backend = 'systemd';
+    }
+
+    if (!formData.name || !formData.filter || !formData.logpath) {
+        toast('warning', 'Please fill in all required fields: Name, Filter, and Log Path');
+        return;
+    }
+
+    showBusy('Creating jail configuration', `Writing and activating ${formData.name}…`);
+
+    authenticatedFetch('/api/jails/config', {
+        method: 'POST',
+        body: JSON.stringify(formData)
+    })
+        .then(data => {
+            hideBusy();
+            if (data.status === 'success') {
+                toast(data.jail_active ? 'success' : 'warning',
+                    data.jail_active
+                        ? `Jail ${formData.name} created and active`
+                        : 'Config saved. Jail will activate on next reload — check logpath/filter.');
+                clearJailForm();
+                loadJailConfigs();
+                fetchJails();
+            } else {
+                toast('error', 'Error saving jail: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            hideBusy();
+            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                toast('error', 'Network error while saving jail: ' + error.message);
+            }
+        });
+}
+
+// ============================================================
+// Configuration — existing jails list
+// ============================================================
+function loadJailConfigs() {
+    const token = getToken();
+    if (!token) {
+        window.location.href = '/login.html';
+        return;
+    }
+
+    fetch('/api/jails/config', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(response => {
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.href = '/login.html';
+                return Promise.reject(new Error('Authentication failed'));
+            }
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                }).catch(() => {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return;
+            if (data.error) throw new Error(data.error);
+            if (data.jails) {
+                renderJailConfigs(data.jails);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading jail configs:', error);
+            if (error.message !== 'Authentication failed') {
+                toast('error', 'Error loading jail configurations: ' + error.message);
+            }
+        });
+}
+
+function fmtDur(v) {
+    if (v === '' || v === undefined || v === null) return '—';
+    return `${v}s`;
+}
+
+function renderJailConfigs(jails) {
+    const container = document.getElementById('jail-config-list');
+    if (!container) return;
+
+    const enabledCount = jails.filter(j => j.enabled === 'true' || j.enabled === true).length;
+    const se = document.getElementById('stat-enabled');
+    if (se) se.textContent = enabledCount;
+
+    if (jails.length === 0) {
+        container.innerHTML = `<div class="empty"><div class="e-icon">${ICONS.edit}</div><h4>No jail configurations</h4><p>Create your first jail with the form on the left.</p></div>`;
+        return;
+    }
+
+    container.innerHTML = '';
+    jails.forEach(jail => {
+        const enabled = jail.enabled === 'true' || jail.enabled === true;
+        const isActive = currentJails.includes(jail.name);
+        const item = document.createElement('div');
+        item.className = 'cfg-item' + (enabled ? '' : ' disabled');
+        item.innerHTML = `
+            <div class="cfg-head">
+                <span class="name">${escapeHtml(jail.name)}</span>
+                <span class="badge ${enabled ? 'green' : 'red'}"><span class="dot"></span>${enabled ? 'Enabled' : 'Disabled'}</span>
+                ${isActive ? '<span class="badge indigo">Running</span>' : ''}
+                <span class="spacer"></span>
+            </div>
+            <div class="cfg-kv">
+                <div><span class="k">Filter</span><span class="v">${escapeHtml(jail.filter || '—')}</span></div>
+                <div><span class="k">Log Path</span><span class="v">${escapeHtml(jail.logpath || '—')}</span></div>
+                <div><span class="k">Max Retry</span><span class="v">${escapeHtml(jail.maxretry || '—')}</span></div>
+                <div><span class="k">Find Time</span><span class="v">${fmtDur(jail.findtime)}</span></div>
+                <div><span class="k">Ban Time</span><span class="v">${fmtDur(jail.bantime)}</span></div>
+                ${jail.action ? `<div><span class="k">Action</span><span class="v">${escapeHtml(jail.action)}</span></div>` : ''}
+            </div>
+            <div class="cfg-actions">
+                <button class="btn btn-outline btn-sm" onclick="editJail('${jail.name}')">${ICONS.edit} Edit</button>
+                <button class="btn ${enabled ? 'btn-ghost' : 'btn-success'} btn-sm" onclick="toggleJail('${jail.name}', ${enabled})">${enabled ? ICONS.stop + ' Stop' : ICONS.play + ' Start'}</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteJail('${jail.name}')">${ICONS.trash} Delete</button>
+            </div>`;
+        container.appendChild(item);
+    });
+}
+
+function editJail(jailName) {
+    authenticatedFetch('/api/jails/config')
+        .then(data => {
+            const jail = data.jails.find(j => j.name === jailName);
+            if (!jail) return;
+            switchView('config');
+            populateFilterOptions();
+
+            document.getElementById('jail-name').value = jail.name;
+            document.getElementById('jail-logpath').value = jail.logpath;
+            document.getElementById('jail-maxretry').value = jail.maxretry;
+            document.getElementById('jail-findtime').value = jail.findtime;
+            document.getElementById('jail-bantime').value = jail.bantime;
+            document.getElementById('jail-action').value = jail.action || '';
+            document.getElementById('jail-enabled').checked = jail.enabled === 'true' || jail.enabled === true;
+            document.getElementById('jail-form-title').textContent = `Edit Jail — ${jail.name}`;
+
+            const known = FILTERS.some(f => f.value === jail.filter);
+            if (known) {
+                document.getElementById('jail-filter-custom').value = '';
+                onFilterChange(jail.filter);
+                // don't let the filter defaults overwrite the stored values
+                document.getElementById('jail-name').value = jail.name;
+                document.getElementById('jail-logpath').value = jail.logpath;
+                document.getElementById('jail-maxretry').value = jail.maxretry;
+                document.getElementById('jail-findtime').value = jail.findtime;
+                document.getElementById('jail-bantime').value = jail.bantime;
+                document.getElementById('jail-action').value = jail.action || '';
+                document.getElementById('jail-enabled').checked = jail.enabled === 'true' || jail.enabled === true;
+            } else {
+                document.getElementById('jail-filter').value = jail.filter || '';
+                document.getElementById('jail-filter-custom').value = jail.filter || '';
+                setFilterSelectedUI('');
+                if (jail.filter) loadFilterContent(jail.filter);
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        })
+        .catch(error => {
+            console.error('Error loading jail for edit:', error);
+        });
+}
+
+function toggleJail(jailName, currentlyEnabled) {
+    const action = currentlyEnabled ? 'stop' : 'start';
+    authenticatedFetch(`/api/jails/${jailName}/${action}`, { method: 'POST' })
+        .then(data => {
+            if (data.status === 'success') {
+                toast('success', `Jail ${jailName} ${action === 'stop' ? 'stopped' : 'started'}`);
+                loadJailConfigs();
+                fetchJails();
+            } else {
+                toast('error', 'Error: ' + (data.error || 'unknown'));
+            }
+        })
+        .catch(error => {
+            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                toast('error', `Error ${action}ing jail: ${error.message}`);
+            }
+        });
+}
+
+function deleteJail(jailName) {
+    showConfirm('Delete jail?', `Are you sure you want to delete jail ${jailName}? This will stop the jail and remove its configuration.`)
+        .then(ok => {
+            if (!ok) return;
+            showBusy('Deleting jail', `Stopping and removing ${jailName}…`);
+            return authenticatedFetch(`/api/jails/config/${jailName}`, { method: 'DELETE' })
+                .then(data => {
+                    hideBusy();
+                    if (data.status === 'success') {
+                        toast('success', `Jail ${jailName} deleted successfully`);
+                        loadJailConfigs();
+                        fetchJails();
+                    } else {
+                        toast('error', 'Error deleting jail: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    hideBusy();
+                    if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                        toast('error', 'Network error while deleting jail: ' + error.message);
+                    }
+                });
+        });
+}
+
+// Alias kept for parity with old code paths
+function deleteJailConfig(jailName) { deleteJail(jailName); }
+
+// ============================================================
+// Ignore IP management
+// ============================================================
+function loadIgnoreIP() {
+    authenticatedFetch('/api/ignoreip')
+        .then(data => {
+            if (data.ignoreip) {
+                ignoreIPList = data.ignoreip;
+                renderIgnoreIPList();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading ignoreIP:', error);
+            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                toast('error', 'Error loading ignoreIP: ' + error.message);
+            }
+        });
+}
+
+function renderIgnoreIPList() {
+    const container = document.getElementById('ignoreip-list');
+    container.innerHTML = '';
+
+    if (ignoreIPList.length === 0) {
+        container.innerHTML = '<p style="color:var(--muted);font-size:0.82rem;margin:0;">No ignoreIP entries found.</p>';
+        return;
+    }
+
+    ignoreIPList.forEach(ip => {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.innerHTML = `<span>${escapeHtml(ip)}</span><button class="chip-x" title="Remove ${escapeHtml(ip)}" onclick="removeIgnoreIP('${ip}')">${ICONS.x}</button>`;
+        container.appendChild(chip);
+    });
+}
+
+function addIgnoreIP() {
+    const input = document.getElementById('new-ignoreip');
+    const ip = input.value.trim();
+
+    if (!ip) {
+        toast('warning', 'Please enter an IP address or CIDR range');
+        return;
+    }
+
+    const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    const cidrRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([0-2]?[0-9]|3[0-2])$/;
+
+    if (!ipRegex.test(ip) && !cidrRegex.test(ip)) {
+        toast('warning', 'Invalid IP or CIDR format. Use e.g. 192.168.1.1 or 10.0.0.0/24');
+        return;
+    }
+
+    if (ignoreIPList.includes(ip)) {
+        toast('warning', 'This IP is already in the ignore list');
+        return;
+    }
+
+    ignoreIPList.push(ip);
+    renderIgnoreIPList();
+    input.value = '';
+    saveIgnoreIPToBackend();
+}
+
+function removeIgnoreIP(ip) {
+    ignoreIPList = ignoreIPList.filter(item => item !== ip);
+    renderIgnoreIPList();
+    saveIgnoreIPToBackend();
+}
+
+function saveIgnoreIPToBackend() {
+    authenticatedFetch('/api/ignoreip', {
+        method: 'POST',
+        body: JSON.stringify({ ignoreip: ignoreIPList })
+    })
+        .then(data => {
+            if (data.status === 'success') {
+                toast('success', 'Ignore list saved and fail2ban reloaded');
+                // The backend merges default private ranges — resync the view
+                loadIgnoreIP();
+            }
+        })
+        .catch(error => {
+            console.error('Error auto-saving ignoreIP:', error);
+            if (error.message !== 'Authentication failed' && error.message !== 'No token') {
+                toast('error', 'Error saving ignoreIP: ' + error.message);
+            }
+        });
+}
+
+// Expose functions used by inline handlers
+window.showJailConfig = showJailConfig;
+window.hideJailConfig = hideJailConfig;
+window.onFilterChange = onFilterChange;
+window.filterFilterList = filterFilterList;
+window.clearJailForm = clearJailForm;
+window.loadIgnoreIP = loadIgnoreIP;
+window.addIgnoreIP = addIgnoreIP;
+window.removeIgnoreIP = removeIgnoreIP;
+window.editJail = editJail;
+window.toggleJail = toggleJail;
+window.deleteJail = deleteJail;
+window.viewBannedIPs = viewBannedIPs;
+window.loadJailConfigs = loadJailConfigs;
+window.banIP = banIP;
+
+// ============================================================
+// Boot
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Navigation
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => switchView(btn.dataset.view));
+    });
+    document.getElementById('hamburger').addEventListener('click', openSidebar);
+    document.getElementById('sidebar-scrim').addEventListener('click', closeSidebar);
+
+    // Refresh + confirm modal wiring
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+        fetchJails();
+        loadJailConfigs();
+        loadIgnoreIP();
+        checkHealth();
+        toast('info', 'Data refreshed');
+    });
+    document.getElementById('confirm-ok').addEventListener('click', () => closeConfirm(true));
+    document.getElementById('confirm-cancel').addEventListener('click', () => closeConfirm(false));
+    document.getElementById('confirm-modal').addEventListener('click', e => {
+        if (e.target.id === 'confirm-modal') closeConfirm(false);
+    });
+
+    // Jail form + logout
+    const jailForm = document.getElementById('jail-form');
+    if (jailForm) jailForm.addEventListener('submit', handleJailFormSubmit);
+    document.getElementById('logout-btn').addEventListener('click', logout);
+
+    // Custom filter input clears the known-filter selection
+    document.getElementById('jail-filter-custom').addEventListener('input', function () {
+        if (this.value.trim()) {
+            setFilterSelectedUI('');
+            document.getElementById('jail-filter').value = '';
+        }
+    });
+
+    // Auth verification (pairs with auth-pending gate in index.html)
+    const token = getToken();
+    const reveal = () => { document.documentElement.classList.remove('auth-pending'); document.body.classList.add('auth-ready'); };
+    const goLogin = () => window.location.replace('/login.html');
+    if (!token) { goLogin(); return; }
+
+    fetch('/api/verify-token', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(response => {
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                goLogin();
+                return Promise.reject(new Error('Token verification failed'));
+            }
+            if (!response.ok) {
+                return Promise.reject(new Error(`Token verification failed: ${response.status}`));
+            }
+            return response.json();
+        })
+        .then(() => { reveal(); })
+        .catch(error => {
+            if (error.message === 'Token verification failed') return;
+            reveal(); // network/server error: let API calls decide, don't strand on blank screen
+        });
+
+    // Initial data load
+    populateFilterOptions();
+    fetchJails();
+    loadJailConfigs();
+    loadIgnoreIP();
+    checkHealth();
+
+    // Periodic refresh
+    setInterval(fetchJails, REFRESH_MS);
+    setInterval(checkHealth, REFRESH_MS);
+});
+
+// Inactivity timer
 let inactivityTimer;
 function resetInactivityTimer() {
     clearTimeout(inactivityTimer);
     inactivityTimer = setTimeout(() => {
         localStorage.removeItem('token');
         window.location.href = '/login.html';
-    }, SESSION_TIMEOUT); // 2 minutes
+    }, SESSION_TIMEOUT);
 }
 
-// Reset timer on activity
 document.addEventListener('mousemove', resetInactivityTimer);
 document.addEventListener('keypress', resetInactivityTimer);
 resetInactivityTimer();
-
-// Add logout handler
-document.getElementById('logout-btn').addEventListener('click', function() {
-    localStorage.removeItem('token');
-    // Clear the cookie by setting it to expire
-    document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    window.location.replace('/login.html');
-});
-
-// Initial load
-fetchJails();
-    
-// Refresh every 30 seconds
-setInterval(fetchJails, 30000);
-
-function parseJailStatus(statusText) {
-    const bannedIPsMatch = statusText.match(/Banned IP list:\t(.+)$/);
-    if (!bannedIPsMatch) return { bannedIPs: [] };
-
-    const bannedIPs = bannedIPsMatch[1].split(' ').filter(ip => ip.trim());
-    return { bannedIPs };
-}
-
-function isSubnet(ip) {
-    return ip.includes('/');
-}
-
-// Add function to render IP table
-function renderIPTable(table, ips, jail) {
-    const tbody = document.createElement('tbody');
-    const windowWidth = window.innerWidth;
-    const columns = windowWidth > 1200 ? 4 : windowWidth > 768 ? 3 : windowWidth > 480 ? 2 : 1;
-    
-    for (let i = 0; i < ips.length; i += columns) {
-        const row = document.createElement('tr');
-        for (let j = 0; j < columns; j++) {
-            if (i + j < ips.length) {
-                const ip = ips[i + j];
-                const cell = document.createElement('td');
-                cell.innerHTML = `
-                    <div class="ip-cell ${isSubnet(ip) ? 'subnet' : ''}">
-                        <span>${ip}</span>
-                        <button onclick="unbanIP('${jail}', '${ip}')" class="unban-button">
-                            <svg viewBox="0 0 24 24" width="16" height="16">
-                                <path fill="currentColor" d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
-                            </svg>
-                        </button>
-                    </div>
-                `;
-                row.appendChild(cell);
-            }
-        }
-        tbody.appendChild(row);
-    }
-    
-    table.appendChild(tbody);
-}
-
-// Add global filter function
-window.filterIPs = function() {
-    const searchInput = document.getElementById('ip-search');
-    const filter = searchInput.value.toLowerCase();
-    const table = document.getElementById('ip-table');
-    const cells = table.getElementsByClassName('ip-cell');
-
-    for (let cell of cells) {
-        const ip = cell.querySelector('span').textContent;
-        if (ip.toLowerCase().includes(filter)) {
-            cell.closest('td').style.display = "";
-        } else {
-            cell.closest('td').style.display = "none";
-        }
-    }
-}
